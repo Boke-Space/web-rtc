@@ -10,3 +10,9 @@ export interface Interceptors<T = AxiosResponse> {
 export interface Config<T = AxiosResponse> extends AxiosRequestConfig {
   interceptors?: Interceptors<T>
 }
+
+export type Data<T = any> = {
+  code: number
+  data: T
+  message: string
+}

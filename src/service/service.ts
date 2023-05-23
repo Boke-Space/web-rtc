@@ -1,5 +1,6 @@
-import axios, { AxiosInstance } from 'axios'
-import { Config, Interceptors } from './type'
+import axios from 'axios'
+import type { AxiosInstance } from 'axios'
+import type { Config, Interceptors } from './type'
 
 export class Service {
   instance: AxiosInstance

@@ -1,10 +1,10 @@
-export enum ComponentPath {
+export enum routerPath {
     Home = '/home',
     Push = '/push',
-    Pull = '/pull',
+    Pull = '/pull/:roomId',
 }
 
-export enum ComponentName {
+export enum routerName {
     Home = 'Home',
     Push = 'Push',
     Pull = 'Pull',
