@@ -1,0 +1,13 @@
+<template>
+    <div>
+        Push
+    </div>
+</template>
+
+<script setup lang="ts">
+
+</script>
+
+<style module>
+
+</style>
