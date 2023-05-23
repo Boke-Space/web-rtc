@@ -12,6 +12,8 @@ declare module '@vue/runtime-core' {
     Camera: typeof import('./src/components/Camera.vue')['default']
     ElButton: typeof import('element-plus/es')['ElButton']
     Flv: typeof import('./src/components/Flv.vue')['default']
+    RouterLink: typeof import('vue-router')['RouterLink']
+    RouterView: typeof import('vue-router')['RouterView']
     Screen: typeof import('./src/components/Screen.vue')['default']
   }
 }

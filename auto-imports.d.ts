@@ -5,6 +5,7 @@
 export {}
 declare global {
   const EffectScope: typeof import('vue')['EffectScope']
+  const Service: typeof import('./src/service/service')['Service']
   const computed: typeof import('vue')['computed']
   const createApp: typeof import('vue')['createApp']
   const customRef: typeof import('vue')['customRef']
@@ -42,6 +43,7 @@ declare global {
   const readonly: typeof import('vue')['readonly']
   const ref: typeof import('vue')['ref']
   const resolveComponent: typeof import('vue')['resolveComponent']
+  const service: typeof import('./src/service/index')['service']
   const shallowReactive: typeof import('vue')['shallowReactive']
   const shallowReadonly: typeof import('vue')['shallowReadonly']
   const shallowRef: typeof import('vue')['shallowRef']
