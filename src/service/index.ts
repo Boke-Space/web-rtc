@@ -1,7 +1,7 @@
 import { Service } from './service'
 
 export const service = new Service({
-  baseURL: 'http://localhost:4300',
+  baseURL: 'http://localhost:3000',
   timeout: 5000,
   interceptors: {
     requestInterceptor: (config: any) => {

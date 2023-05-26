@@ -1,20 +1,125 @@
 <template>
-    <div>
-        Pull
+    <div class="srs-webrtc-pull-wrap">
+        <template v-if="roomNoLive">当前房间没在直播~</template>
+        <template v-else>
+            <div class="left">
+                <div ref="topRef" class="head">
+                    <div class="info">
+                        <div class="avatar"></div>
+                        <div class="detail">
+                            <div class="top">房间名：{{ roomName }}</div>
+                            <div class="bottom">
+                                <span>你的socketId：{{ getSocketId() }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="video-wrap">
+                    <video id="localVideo" ref="localVideoRef" autoplay muted controls></video>
+                </div>
+            </div>
+            <div class="right">
+                <div class="tab">
+                    <span>在线用户</span>
+                    <span> | </span>
+                    <span>排行榜</span>
+                </div>
+                <div class="user-list">
+                    <div v-for="(item, index) in liveUserList" :key="index" class="item">
+                        <div class="info">
+                            <div class="avatar"></div>
+                            <div class="username">{{ item.socketId }}</div>
+                        </div>
+                    </div>
+                    <div v-if="userStore.userInfo" class="item">
+                        <div class="info">
+                            <img :src="userStore.userInfo.avatar" class="avatar" alt="" />
+                            <div class="username">{{ userStore.userInfo.username }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="danmu-list">
+                    <div v-for="(item, index) in damuList" :key="index" class="item">
+                        <template v-if="item.msgType === DanmuMsgTypeEnum.danmu">
+                            <span class="name">
+                                {{ item.userInfo?.username || item.socketId }}：
+                            </span>
+                            <span class="msg">{{ item.msg }}</span>
+                        </template>
+                        <template v-else-if="item.msgType === DanmuMsgTypeEnum.otherJoin">
+                            <span class="name system">系统通知：</span>
+                            <span class="msg">
+                                {{ item.userInfo?.username || item.socketId }}进入直播！
+                            </span>
+                        </template>
+                        <template v-else-if="item.msgType === DanmuMsgTypeEnum.userLeaved">
+                            <span class="name system">系统通知：</span>
+                            <span class="msg">
+                                {{ item.userInfo?.username || item.socketId }}离开直播！
+                            </span>
+                        </template>
+                    </div>
+                </div>
+                <div class="send-msg">
+                    <textarea v-model="danmuStr" class="ipt" @keydown="keydownDanmu"></textarea>
+                    <div class="btn" @click="sendDanmu">
+                        发送
+                    </div>
+                </div>
+            </div>
+        </template>
     </div>
 </template>
+  
+<script lang="ts" setup>
+import { onMounted, onUnmounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 
-<script setup lang="ts">
+import { useUserStore } from '@/store/user';
+import { liveTypeEnum, DanmuMsgTypeEnum } from '@/types';
 
 const route = useRoute();
-const liveType = route.query.liveType
+const userStore = useUserStore();
 
 const topRef = ref<HTMLDivElement>();
 const bottomRef = ref<HTMLDivElement>();
 const localVideoRef = ref<HTMLVideoElement>();
 
-</script>
+const {
+    initPull,
+    closeWs,
+    closeRtc,
+    getSocketId,
+    keydownDanmu,
+    sendDanmu,
+    roomName,
+    roomNoLive,
+    damuList,
+    liveUserList,
+    danmuStr,
+} = usePull({
+    localVideoRef,
+    isFlv: route.query.liveType === liveTypeEnum.srsFlvPull,
+    isSRS: route.query.liveType === liveTypeEnum.srsWebrtcPull,
+});
 
+onUnmounted(() => {
+    closeWs();
+    closeRtc();
+});
+
+onMounted(() => {
+    if (topRef.value && bottomRef.value && localVideoRef.value) {
+        const res =
+            bottomRef.value.getBoundingClientRect().top -
+            (topRef.value.getBoundingClientRect().top +
+                topRef.value.getBoundingClientRect().height);
+        localVideoRef.value.style.height = `${res}px`;
+    }
+    initPull();
+});
+</script>
+  
 <style lang="scss" scoped>
 .srs-webrtc-pull-wrap {
     margin: 20px auto 0;
@@ -290,4 +395,6 @@ const localVideoRef = ref<HTMLVideoElement>();
             }
         }
     }
-}</style>
+}
+</style>
+  

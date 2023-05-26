@@ -1,3 +1,10 @@
+import { getRandomString } from 'billd-utils';
+
+import { type IDanmu, type ILiveUser, DanmuMsgTypeEnum, type IOffer, type IAdminIn, type ICandidate } from "@/types";
+import { SRSWebRTCClass } from "@/utils/srsWebRtc";
+import { WebRTCClass } from "@/utils/webRtc";
+import { SocketMessage, SocketStatus } from '@/types/websocket';
+import { WebSocketClass } from '@/utils/webSocket';
 
 export function usePull({
     localVideoRef,
@@ -9,11 +16,11 @@ export function usePull({
     isFlv?: boolean;
 }) {
     const route = useRoute();
-    const userStore = useUserStore();
     const networkStore = useNetworkStore();
+    const userStore = useUserStore();
 
     const heartbeatTimer = ref();
-    const roomId = ref(route.params.roomId as string);
+    const roomId = route.params.roomId as string
     const roomName = ref('');
     const streamurl = ref('');
     const flvurl = ref('');
@@ -25,25 +32,18 @@ export function usePull({
         audio: true,
         video: true,
     });
-    const giftList = ref([
-        { name: '鲜花', ico: '', price: '免费' },
-        { name: '肥宅水', ico: '', price: '2元' },
-        { name: '小鸡腿', ico: '', price: '3元' },
-        { name: '大鸡腿', ico: '', price: '5元' },
-        { name: '一杯咖啡', ico: '', price: '10元' },
-    ]);
 
     watch(
         [
             () => userStore.userInfo,
-            () => networkStore.wsMap.get(roomId.value)?.socketIo?.connected,
+            () => networkStore.wsMap.get(roomId)?.socketIo?.connected,
         ],
         ([userInfo, connected]) => {
             if (userInfo && connected) {
-                const instance = networkStore.wsMap.get(roomId.value);
+                const instance = networkStore.wsMap.get(roomId);
                 if (!instance) return;
                 instance.send({
-                    msgType: WsMsgTypeEnum.updateJoinInfo,
+                    msgType: SocketMessage.updateJoinInfo,
                     data: {
                         userInfo: userStore.userInfo,
                     },
@@ -52,163 +52,126 @@ export function usePull({
         }
     );
 
-    function initPull() {
-        console.warn('开始new WebSocketClass');
-        const ws = new WebSocketClass({
-            roomId: roomId.value,
-            url:
-                process.env.NODE_ENV === 'development'
-                    ? 'ws://localhost:4300'
-                    : 'wss://live.hsslive.cn',
-            isAdmin: false,
-        });
-        ws.update();
-        initReceive();
-        localVideoRef.value.addEventListener('loadstart', () => {
-            console.warn('视频流-loadstart');
-            const rtc = networkStore.getRtcMap(roomId.value);
-            if (!rtc) return;
-            rtc.rtcStatus.loadstart = true;
-            rtc.update();
-        });
-
-        localVideoRef.value.addEventListener('loadedmetadata', () => {
-            console.warn('视频流-loadedmetadata');
-            const rtc = networkStore.getRtcMap(roomId.value);
-            if (!rtc) return;
-            rtc.rtcStatus.loadedmetadata = true;
-            rtc.update();
-        });
-    }
-
-    function handleHeartbeat() {
-        heartbeatTimer.value = setInterval(() => {
-            const instance = networkStore.wsMap.get(roomId.value);
-            if (!instance) return;
-            instance.send({
-                msgType: WsMsgTypeEnum.heartbeat,
-            });
-        }, 1000 * 30);
-    }
-
-    function closeWs() {
-        const instance = networkStore.wsMap.get(roomId.value);
-        instance?.close();
-    }
-
-    function closeRtc() {
-        networkStore.rtcMap.forEach((rtc) => {
-            rtc.close();
-        });
-    }
-
-    function getSocketId() {
-        return networkStore.wsMap.get(roomId.value!)?.socketIo?.id || '-1';
-    }
-
-    function sendJoin() {
-        const instance = networkStore.wsMap.get(roomId.value);
+    function sendJoin(roomId: string) {
+        const instance = networkStore.wsMap.get(roomId);
         if (!instance) return;
         instance.send({
-            msgType: WsMsgTypeEnum.join,
+            msgType: SocketMessage.join,
             data: { userInfo: userStore.userInfo },
         });
     }
 
-    /** 原生的webrtc时，receiver必传 */
-    async function startNewWebRtc(receiver?: string) {
-        if (isSRS) {
-            console.warn('开始new SRSWebRTCClass', getSocketId());
-            const rtc = new SRSWebRTCClass({
-                roomId: `${roomId.value}___${getSocketId()}`,
+    // Websocket心跳机制 用于保持客户端和服务器之间的长连接
+    function handleHeartbeat(roomId: string) {
+        const heartbeatTimer = ref();
+        heartbeatTimer.value = setInterval(() => {
+            const instance = networkStore.wsMap.get(roomId);
+            if (!instance) return;
+            instance.send({
+                msgType: SocketMessage.heartbeat,
+                data: 'Websocket心跳机制'
             });
-            rtc.rtcStatus.joined = true;
-            rtc.update();
-            if (track.video) {
-                rtc.peerConnection?.addTransceiver('video', { direction: 'recvonly' });
-            }
-            if (track.audio) {
-                rtc.peerConnection?.addTransceiver('audio', { direction: 'recvonly' });
-            }
-            try {
-                const offer = await rtc.createOffer();
-                if (!offer) return;
-                await rtc.setLocalDescription(offer);
-                const res: any = await fetchRtcV1Play({
-                    api: `${process.env.NODE_ENV === 'development'
-                            ? 'http://localhost:1985'
-                            : 'https://live.hsslive.cn/srs'
-                        }/rtc/v1/play/`,
-                    clientip: null,
-                    sdp: offer.sdp!,
-                    streamurl: streamurl.value,
-                    tid: getRandomString(10),
-                });
-                await rtc.setRemoteDescription(
-                    new RTCSessionDescription({ type: 'answer', sdp: res.sdp })
-                );
-            } catch (error) {
-                console.log(error);
-            }
-        } else {
-            console.warn('开始new WebRTCClass');
-            const rtc = new WebRTCClass({ roomId: `${roomId.value}___${receiver!}` });
-            return rtc;
-        }
+        }, 1000 * 30);
     }
 
-    function keydownDanmu(event: KeyboardEvent) {
-        const key = event.key.toLowerCase();
-        if (key === 'enter') {
-            event.preventDefault();
-            sendDanmu();
-        }
-    }
 
-    function sendDanmu() {
-        if (!danmuStr.value.trim().length) {
-            window.$message.warning('请输入弹幕内容！');
-            return;
-        }
-        const instance = networkStore.wsMap.get(roomId.value);
-        if (!instance) return;
-        const danmu: IDanmu = {
-            socketId: getSocketId(),
-            userInfo: userStore.userInfo,
-            msgType: DanmuMsgTypeEnum.danmu,
-            msg: danmuStr.value,
-        };
-        instance.send({
-            msgType: WsMsgTypeEnum.message,
-            data: danmu,
+    function webSocketInit() {
+        const ws = new WebSocketClass({
+            roomId,
+            url: 'ws://localhost:3000',
+            isAdmin: false,
         });
-        damuList.value.push(danmu);
-        danmuStr.value = '';
+        ws.update();
+        initReveive()
+        // const instance = networkStore.wsMap.get(roomId)!
+        // useWebSocket(instance, roomId)
     }
 
-    function initReceive() {
-        const instance = networkStore.wsMap.get(roomId.value);
+    function initReveive() {
+        const instance = networkStore.wsMap.get(roomId)!
+
         if (!instance?.socketIo) return;
         // websocket连接成功
-        instance.socketIo.on(WsConnectStatusEnum.connect, () => {
+        instance.socketIo.on(SocketStatus.connect, () => {
             console.log('【websocket】websocket连接成功');
-            if (!instance) return;
-            instance.status = WsConnectStatusEnum.connect;
+            instance.status = SocketStatus.connect;
             instance.update();
-            sendJoin();
-            handleHeartbeat();
+            sendJoin(roomId);
+            handleHeartbeat(roomId);
         });
 
         // websocket连接断开
-        instance.socketIo.on(WsConnectStatusEnum.disconnect, () => {
+        instance.socketIo.on(SocketStatus.disconnect, () => {
             console.log('【websocket】websocket连接断开');
             if (!instance) return;
-            instance.status = WsConnectStatusEnum.disconnect;
+            instance.status = SocketStatus.disconnect;
             instance.update();
         });
 
+        // 当前所有在线用户
+        instance.socketIo.on(SocketMessage.roomLiveing, (data: IAdminIn) => {
+            console.log('【websocket】收到管理员正在直播', data);
+            // if (isSRS && !isFlv) {
+            //     startNewWebRtc();
+            // }
+        });
+
+        // 当前所有在线用户
+        instance.socketIo.on(SocketMessage.roomNoLive, (data: IAdminIn) => {
+            console.log('【websocket】收到管理员不在直播', data);
+            // roomNoLive.value = true;
+            // closeRtc();
+        });
+
+        // 当前所有在线用户
+        instance.socketIo.on(SocketMessage.liveUser, (data) => {
+            console.log('【websocket】当前所有在线用户', data);
+        });
+
+        // 收到用户发送消息
+        instance.socketIo.on(SocketMessage.message, (data) => {
+            console.log('【websocket】收到用户发送消息', data);
+        });
+
+        // 用户加入房间
+        instance.socketIo.on(SocketMessage.joined, (data) => {
+            console.log('【websocket】用户加入房间完成', data);
+            // roomName.value = data.data.roomName;
+            // track.audio = data.data.track_audio;
+            // track.video = data.data.track_video;
+            // streamurl.value = data.data.streamurl;
+            // flvurl.value = data.data.flvurl;
+            // if (isFlv) {
+            //     useFlvPlay(flvurl.value, localVideoRef.value!);
+            // }
+            // instance.send({ msgType: SocketMessage.getLiveUser });
+        });
+
+        // 其他用户加入房间
+        instance.socketIo.on(SocketMessage.otherJoin, (data) => {
+            console.log('【websocket】其他用户加入房间', data);
+        });
+
+        // 用户离开房间
+        instance.socketIo.on(SocketMessage.leave, (data) => {
+            console.log('【websocket】用户离开房间', data);
+            if (!instance) return;
+            instance.socketIo?.emit(SocketMessage.leave, {
+                roomId: instance.roomId,
+            });
+        });
+
+        // 用户离开房间完成
+        instance.socketIo.on(SocketMessage.leaved, (data) => {
+            console.log('【websocket】用户离开房间完成', data);
+            if (!instance) return;
+        });
+    }
+
+    function webRTCInit() {
+        const instance = networkStore.wsMap.get(roomId)!
         // 收到offer
-        instance.socketIo.on(WsMsgTypeEnum.offer, async (data: IOffer) => {
+        instance.socketIo.on(SocketMessage.offer, async (data: IOffer) => {
             console.warn('【websocket】收到offer', data);
             if (isSRS) return;
             if (!instance) return;
@@ -220,7 +183,7 @@ export function usePull({
                     const sdp = await rtc.createAnswer();
                     await rtc.setLocalDescription(sdp);
                     instance.send({
-                        msgType: WsMsgTypeEnum.answer,
+                        msgType: SocketMessage.answer,
                         data: { sdp, sender: getSocketId(), receiver: data.data.sender },
                     });
                 }
@@ -230,11 +193,11 @@ export function usePull({
         });
 
         // 收到answer
-        instance.socketIo.on(WsMsgTypeEnum.answer, async (data: IOffer) => {
+        instance.socketIo.on(SocketMessage.answer, async (data: IOffer) => {
             console.warn('【websocket】收到answer', data);
             if (isSRS) return;
             if (!instance) return;
-            const rtc = networkStore.getRtcMap(`${roomId.value}___${data.socketId}`);
+            const rtc = networkStore.getRtcMap(`${roomId}___${data.socketId}`);
             if (!rtc) return;
             rtc.rtcStatus.answer = true;
             rtc.update();
@@ -247,11 +210,11 @@ export function usePull({
         });
 
         // 收到candidate
-        instance.socketIo.on(WsMsgTypeEnum.candidate, (data: ICandidate) => {
+        instance.socketIo.on(SocketMessage.candidate, (data: ICandidate) => {
             console.warn('【websocket】收到candidate', data);
             if (isSRS) return;
             if (!instance) return;
-            const rtc = networkStore.getRtcMap(`${roomId.value}___${data.socketId}`);
+            const rtc = networkStore.getRtcMap(`${roomId}___${data.socketId}`);
             if (!rtc) return;
             if (data.socketId !== getSocketId()) {
                 console.log('不是我发的candidate');
@@ -272,96 +235,111 @@ export function usePull({
                 console.log('是我发的candidate');
             }
         });
+    }
 
-        // 当前所有在线用户
-        instance.socketIo.on(WsMsgTypeEnum.roomLiveing, (data: IAdminIn) => {
-            console.log('【websocket】收到管理员正在直播', data);
-            if (isSRS && !isFlv) {
-                startNewWebRtc();
-            }
+    function initPull() {
+        webSocketInit()
+        webRTCInit()
+        localVideoRef.value.addEventListener('loadstart', () => {
+            console.warn('视频流-loadstart');
+            const rtc = networkStore.getRtcMap(roomId);
+            if (!rtc) return;
+            rtc.rtcStatus.loadstart = true;
+            rtc.update();
         });
 
-        // 当前所有在线用户
-        instance.socketIo.on(WsMsgTypeEnum.roomNoLive, (data: IAdminIn) => {
-            console.log('【websocket】收到管理员不在直播', data);
-            roomNoLive.value = true;
-            closeRtc();
+        localVideoRef.value.addEventListener('loadedmetadata', () => {
+            console.warn('视频流-loadedmetadata');
+            const rtc = networkStore.getRtcMap(roomId);
+            if (!rtc) return;
+            rtc.rtcStatus.loadedmetadata = true;
+            rtc.update();
         });
+    }
 
-        // 当前所有在线用户
-        instance.socketIo.on(WsMsgTypeEnum.liveUser, (data) => {
-            console.log('【websocket】当前所有在线用户', data);
-            if (!instance) return;
-            liveUserList.value = data.map((item) => ({
-                avatar: 'red',
-                socketId: item.id,
-            }));
+
+
+    function closeWs() {
+        const instance = networkStore.wsMap.get(roomId);
+        instance?.close();
+    }
+
+    function closeRtc() {
+        networkStore.rtcMap.forEach((rtc) => {
+            rtc.close();
         });
+    }
 
-        // 收到用户发送消息
-        instance.socketIo.on(WsMsgTypeEnum.message, (data) => {
-            console.log('【websocket】收到用户发送消息', data);
-            if (!instance) return;
-            const danmu: IDanmu = {
-                msgType: DanmuMsgTypeEnum.danmu,
-                socketId: data.socketId,
-                userInfo: data.data.userInfo,
-                msg: data.data.msg,
-            };
-            damuList.value.push(danmu);
-        });
+    function getSocketId() {
+        return networkStore.wsMap.get(roomId!)?.socketIo?.id || '-1';
+    }
 
-        // 用户加入房间
-        instance.socketIo.on(WsMsgTypeEnum.joined, (data) => {
-            console.log('【websocket】用户加入房间完成', data);
-            roomName.value = data.data.roomName;
-            track.audio = data.data.track_audio;
-            track.video = data.data.track_video;
-            streamurl.value = data.data.streamurl;
-            flvurl.value = data.data.flvurl;
-            if (isFlv) {
-                useFlvPlay(flvurl.value, localVideoRef.value!);
-            }
-            instance.send({ msgType: WsMsgTypeEnum.getLiveUser });
-        });
-
-        // 其他用户加入房间
-        instance.socketIo.on(WsMsgTypeEnum.otherJoin, (data) => {
-            console.log('【websocket】其他用户加入房间', data);
-            const danmu: IDanmu = {
-                msgType: DanmuMsgTypeEnum.otherJoin,
-                socketId: data.data.socketId,
-                userInfo: data.data.userInfo,
-                msg: '',
-            };
-            damuList.value.push(danmu);
-        });
-
-        // 用户离开房间
-        instance.socketIo.on(WsMsgTypeEnum.leave, (data) => {
-            console.log('【websocket】用户离开房间', data);
-            if (!instance) return;
-            instance.socketIo?.emit(WsMsgTypeEnum.leave, {
-                roomId: instance.roomId,
+    /** 原生的webrtc时，receiver必传 */
+    async function startNewWebRtc(receiver?: string) {
+        if (isSRS) {
+            console.warn('开始new SRSWebRTCClass', getSocketId());
+            const rtc = new SRSWebRTCClass({
+                roomId: `${roomId}___${getSocketId()}`,
             });
-        });
+            rtc.rtcStatus.joined = true;
+            rtc.update();
+            if (track.video) {
+                rtc.peerConnection?.addTransceiver('video', { direction: 'recvonly' });
+            }
+            if (track.audio) {
+                rtc.peerConnection?.addTransceiver('audio', { direction: 'recvonly' });
+            }
+            try {
+                const offer = await rtc.createOffer();
+                if (!offer) return;
+                await rtc.setLocalDescription(offer);
+                const res: any = await fetchRTCPlayApi({
+                    api: `http://localhost:1985/rtc/v1/play/`,
+                    clientip: null,
+                    sdp: offer.sdp!,
+                    streamurl: streamurl.value,
+                    tid: getRandomString(10),
+                });
+                await rtc.setRemoteDescription(
+                    new RTCSessionDescription({ type: 'answer', sdp: res.sdp })
+                );
+            } catch (error) {
+                console.log(error);
+            }
+        } else {
+            console.warn('开始new WebRTCClass');
+            const rtc = new WebRTCClass({ roomId: `${roomId}___${receiver!}` });
+            return rtc;
+        }
+    }
 
-        // 用户离开房间完成
-        instance.socketIo.on(WsMsgTypeEnum.leaved, (data) => {
-            console.log('【websocket】用户离开房间完成', data);
-            if (!instance) return;
-            const res = liveUserList.value.filter(
-                (item) => item.socketId !== data.socketId
-            );
-            liveUserList.value = res;
-            const danmu: IDanmu = {
-                msgType: DanmuMsgTypeEnum.userLeaved,
-                socketId: data.socketId,
-                userInfo: data.data.userInfo,
-                msg: '',
-            };
-            damuList.value.push(danmu);
+    function keydownDanmu(event: KeyboardEvent) {
+        const key = event.key.toLowerCase();
+        if (key === 'enter') {
+            event.preventDefault();
+            sendDanmu();
+        }
+    }
+
+    function sendDanmu() {
+        if (!danmuStr.value.trim().length) {
+            // window.$message.warning('请输入弹幕内容！');
+            return;
+        }
+        const instance = networkStore.wsMap.get(roomId);
+        if (!instance) return;
+        const danmu: IDanmu = {
+            socketId: getSocketId(),
+            userInfo: userStore.userInfo,
+            msgType: DanmuMsgTypeEnum.danmu,
+            msg: danmuStr.value,
+        };
+        instance.send({
+            msgType: SocketMessage.message,
+            data: danmu,
         });
+        damuList.value.push(danmu);
+        danmuStr.value = '';
     }
 
     return {
@@ -374,7 +352,6 @@ export function usePull({
         roomName,
         roomNoLive,
         damuList,
-        giftList,
         liveUserList,
         danmuStr,
     };
