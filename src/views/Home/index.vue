@@ -2,13 +2,13 @@
   <div class="home-wrap">
     <div class="left">
       <div class="cover" :style="{ backgroundImage: `url(${currentLiveRoom?.coverImg})` }"></div>
-      <video v-if="currentLiveRoom?.flvurl" ref="videoRef" id="localVideo" controls autoplay muted></video>
+      <video v-if="currentLiveRoom?.flvUrl" ref="videoRef" id="localVideo" controls autoplay muted></video>
       <template v-if="currentLiveRoom">
         <div class="join-btn">
           <div v-if="currentLiveRoom.system === 2" class="btn webrtc" @click="joinRoom()">
             进入直播（webrtc）
           </div>
-          <div v-if="currentLiveRoom?.flvurl" class="btn flv" @click="joinFlvRoom()">
+          <div v-if="currentLiveRoom?.flvUrl" class="btn flv" @click="joinFlvRoom()">
             进入直播（flv）
           </div>
         </div>
@@ -44,15 +44,13 @@ const router = useRouter();
 async function fetchLiveList() {
   try {
     const { data } = await fetchLiveListApi()
-    if (data.total) {
-      liveRoomList.value = data.rows;
-      currentLiveRoom.value = data.rows[0];
+      liveRoomList.value = data;
+      currentLiveRoom.value = data[0];
       nextTick(() => {
-        if (currentLiveRoom.value?.flvurl) {
-          useFlvPlay(currentLiveRoom.value.flvurl, videoRef.value!);
+        if (currentLiveRoom.value?.flvUrl) {
+          useFlvPlay(currentLiveRoom.value.flvUrl, videoRef.value!);
         }
       });
-    }
   } catch (error) {
     console.log(error);
   }
