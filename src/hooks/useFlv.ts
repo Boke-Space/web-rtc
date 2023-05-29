@@ -1,19 +1,30 @@
 import flvJs from 'flv.js'
 
+let flvPlayer: any
+
 export function useFlvPlay(flvUrl: string, videoEl: HTMLVideoElement) {
-    if (flvJs.isSupported()) {
-        const flvPlayer = flvJs.createPlayer({
-            type: 'flv',
-            url: flvUrl
-        })
-        flvPlayer.attachMediaElement(videoEl)
-        flvPlayer.load()
-        try {
-            flvPlayer.play()
-        } catch (error) {
-            console.log(error)
+
+    if (flvPlayer) {
+        flvPlayer.detachMediaElement()
+        flvPlayer.destroy()
+    }
+
+    flvPlayer = flvJs.createPlayer({
+        type: 'flv',
+        url: flvUrl
+    })
+
+    flvPlayer.attachMediaElement(videoEl)
+    flvPlayer.load()
+
+    return {
+        play() {
+            flvPlayer?.play()
+        },
+        pause() {
+            flvPlayer?.pause()
+            flvPlayer?.unload()
+            flvPlayer?.detachMediaElement()
         }
-    } else {
-        console.error('不支持flv')
     }
 }

@@ -16,9 +16,9 @@
     </div>
     <div class="right">
       <div v-if="liveRoomList.length" class="list">
-        <div v-for="(item, index) in liveRoomList" :key="index"
+        <div v-for="(item, index) in liveRoomList" :key="index" @click="changeLive(item)"
           :class="{ item: 1, active: item.roomId === currentLiveRoom?.roomId }"
-          :style="{ backgroundImage: `url(${item.coverImg})` }" @click="currentLiveRoom = item">
+          :style="{ backgroundImage: `url(${item.coverImg})` }">
           <div class="border" :style="{
             opacity: item.roomId === currentLiveRoom?.roomId ? 1 : 0,
           }"></div>
@@ -35,6 +35,7 @@
 
 <script setup lang="ts">
 import { liveTypeEnum } from '@/types';
+import { PlatformEnum } from '../../types/index';
 
 const videoRef = ref<HTMLVideoElement>();
 const liveRoomList = ref<any[]>([])
@@ -44,16 +45,25 @@ const router = useRouter();
 async function fetchLiveList() {
   try {
     const { data } = await fetchLiveListApi()
-      liveRoomList.value = data;
-      currentLiveRoom.value = data[0];
-      nextTick(() => {
-        if (currentLiveRoom.value?.flvUrl) {
-          useFlvPlay(currentLiveRoom.value.flvUrl, videoRef.value!);
-        }
-      });
+    liveRoomList.value = data;
+    currentLiveRoom.value = data[0];
+    nextTick(() => {
+      if (currentLiveRoom.value?.flvUrl) {
+        const { play } = useFlvPlay(currentLiveRoom.value?.flvUrl, videoRef.value!) 
+        play()
+      }
+    });
   } catch (error) {
     console.log(error);
   }
+}
+
+function changeLive(item: any) {
+  const { pause } = useFlvPlay(currentLiveRoom.value?.flvUrl, videoRef.value!)
+  pause()
+  currentLiveRoom.value = item
+  const { play } = useFlvPlay(currentLiveRoom.value?.flvUrl, videoRef.value!)
+  play()
 }
 
 function joinRoom() {

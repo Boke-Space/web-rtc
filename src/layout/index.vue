@@ -1,6 +1,6 @@
 <template>
     <div :class="$style.layout">
-        <div :class="$style.head">Head</div>
+        <!-- <div :class="$style.head">Head</div> -->
         <router-view v-slot="{ Component }" :class="$style.middle">
             <component :is="Component"></component>
         </router-view>

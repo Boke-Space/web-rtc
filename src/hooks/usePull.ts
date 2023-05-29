@@ -54,7 +54,6 @@ export function usePull({
 
     function sendJoin(roomId: string) {
         const instance = networkStore.wsMap.get(roomId);
-        if (!instance) return;
         instance.send({
             msgType: SocketMessage.join,
             data: { userInfo: userStore.userInfo },
@@ -103,7 +102,6 @@ export function usePull({
         // websocket连接断开
         instance.socketIo.on(SocketStatus.disconnect, () => {
             console.log('【websocket】websocket连接断开');
-            if (!instance) return;
             instance.status = SocketStatus.disconnect;
             instance.update();
         });
@@ -126,6 +124,11 @@ export function usePull({
         // 当前所有在线用户
         instance.socketIo.on(SocketMessage.liveUser, (data) => {
             console.log('【websocket】当前所有在线用户', data);
+            // 用户进入房间刷新人数
+            liveUserList.value = data.map((item) => ({
+                avatar: 'red',
+                socketId: item.id,
+            }));
         });
 
         // 收到用户发送消息
@@ -136,15 +139,14 @@ export function usePull({
         // 用户加入房间
         instance.socketIo.on(SocketMessage.joined, (data) => {
             console.log('【websocket】用户加入房间完成', data);
-            // roomName.value = data.data.roomName;
-            // track.audio = data.data.track_audio;
-            // track.video = data.data.track_video;
-            // streamurl.value = data.data.streamurl;
-            // flvurl.value = data.data.flvurl;
-            // if (isFlv) {
-            //     useFlvPlay(flvurl.value, localVideoRef.value!);
-            // }
-            // instance.send({ msgType: SocketMessage.getLiveUser });
+            roomName.value = data.data.roomName;
+            streamurl.value = data.data.streamUrl;
+            flvurl.value = data.data.flvUrl;
+            if (isFlv) {
+                const { play } = useFlvPlay(flvurl.value, localVideoRef.value!)
+                play()
+            }
+            instance.send({ msgType: SocketMessage.getLiveUser });
         });
 
         // 其他用户加入房间
@@ -155,7 +157,6 @@ export function usePull({
         // 用户离开房间
         instance.socketIo.on(SocketMessage.leave, (data) => {
             console.log('【websocket】用户离开房间', data);
-            if (!instance) return;
             instance.socketIo?.emit(SocketMessage.leave, {
                 roomId: instance.roomId,
             });
@@ -164,7 +165,10 @@ export function usePull({
         // 用户离开房间完成
         instance.socketIo.on(SocketMessage.leaved, (data) => {
             console.log('【websocket】用户离开房间完成', data);
-            if (!instance) return;
+            // 用户离开房间刷新人数
+            liveUserList.value = liveUserList.value.filter(
+                (item) => item.socketId !== data.socketId
+            );
         });
     }
 
@@ -174,7 +178,6 @@ export function usePull({
         instance.socketIo.on(SocketMessage.offer, async (data: IOffer) => {
             console.warn('【websocket】收到offer', data);
             if (isSRS) return;
-            if (!instance) return;
             if (data.data.receiver === getSocketId()) {
                 console.log('收到offer，这个offer是发给我的');
                 const rtc = await startNewWebRtc(data.data.sender);
@@ -196,7 +199,6 @@ export function usePull({
         instance.socketIo.on(SocketMessage.answer, async (data: IOffer) => {
             console.warn('【websocket】收到answer', data);
             if (isSRS) return;
-            if (!instance) return;
             const rtc = networkStore.getRtcMap(`${roomId}___${data.socketId}`);
             if (!rtc) return;
             rtc.rtcStatus.answer = true;
@@ -213,7 +215,6 @@ export function usePull({
         instance.socketIo.on(SocketMessage.candidate, (data: ICandidate) => {
             console.warn('【websocket】收到candidate', data);
             if (isSRS) return;
-            if (!instance) return;
             const rtc = networkStore.getRtcMap(`${roomId}___${data.socketId}`);
             if (!rtc) return;
             if (data.socketId !== getSocketId()) {
@@ -256,8 +257,6 @@ export function usePull({
             rtc.update();
         });
     }
-
-
 
     function closeWs() {
         const instance = networkStore.wsMap.get(roomId);
@@ -327,7 +326,6 @@ export function usePull({
             return;
         }
         const instance = networkStore.wsMap.get(roomId);
-        if (!instance) return;
         const danmu: IDanmu = {
             socketId: getSocketId(),
             userInfo: userStore.userInfo,
