@@ -5,7 +5,7 @@
       <video v-if="currentLiveRoom?.flvUrl" ref="videoRef" id="localVideo" controls autoplay muted></video>
       <template v-if="currentLiveRoom">
         <div class="join-btn">
-          <div v-if="currentLiveRoom.system === 2" class="btn webrtc" @click="joinRoom()">
+          <div class="btn webrtc" @click="joinRoom()">
             进入直播（webrtc）
           </div>
           <div v-if="currentLiveRoom?.flvUrl" class="btn flv" @click="joinFlvRoom()">
@@ -67,7 +67,7 @@ function changeLive(item: any) {
 }
 
 function joinRoom() {
-  if (currentLiveRoom.value?.streamurl) {
+  if (currentLiveRoom.value?.streamUrl) {
     router.push({
       path: `/pull/${currentLiveRoom.value?.roomId}`,
       query: {

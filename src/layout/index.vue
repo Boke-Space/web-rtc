@@ -1,6 +1,12 @@
 <template>
     <div :class="$style.layout">
-        <!-- <div :class="$style.head">Head</div> -->
+        <div :class="$style.head">
+            <div style="padding: 10px;">
+                <el-button type="primary" round @click="navigateHome">Home</el-button>
+                <el-button type="primary" round @click="navigateRTC">WebRTC</el-button>
+                <el-button type="primary" round @click="navigateSRS">SRS</el-button>
+            </div>
+        </div>
         <router-view v-slot="{ Component }" :class="$style.middle">
             <component :is="Component"></component>
         </router-view>
@@ -9,7 +15,32 @@
 </template>
 
 <script setup lang="ts">
+import { liveTypeEnum } from '@/types';
+
 const $style = useCssModule()
+const router = useRouter()
+
+function navigateHome() {
+    router.push('/home')
+}
+
+function navigateRTC() {
+    router.push({
+        path: `/push`,
+        query: {
+            liveType: liveTypeEnum.webrtcPush,
+        },
+    });
+}
+
+function navigateSRS() {
+    router.push({
+        path: `/push`,
+        query: {
+            liveType: liveTypeEnum.srsPush,
+        },
+    });
+}
 </script>
 
 <style module lang="scss">

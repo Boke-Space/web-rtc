@@ -22,7 +22,7 @@ const remoteVideoRef = ref<HTMLVideoElement>()
 const rtcRef = ref<RTCPeerConnection>()
 const text = ref('')
 const localStreamRef = ref<MediaStream>()
-const websocket = ref(new WebSocket('ws://127.0.0.1:1234'))
+const websocket = ref(new WebSocket('ws://192.168.192.131:1234'))
 const username = (Math.random() + 1).toString(36).substring(7)
 const status = ref('开始通话')
 

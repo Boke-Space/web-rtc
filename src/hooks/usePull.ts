@@ -77,7 +77,7 @@ export function usePull({
     function webSocketInit() {
         const ws = new WebSocketClass({
             roomId,
-            url: 'ws://localhost:3000',
+            url: 'ws://192.168.192.131:3000',
             isAdmin: false,
         });
         ws.update();
@@ -109,16 +109,16 @@ export function usePull({
         // 当前所有在线用户
         instance.socketIo.on(SocketMessage.roomLiveing, (data: IAdminIn) => {
             console.log('【websocket】收到管理员正在直播', data);
-            // if (isSRS && !isFlv) {
-            //     startNewWebRtc();
-            // }
+            if (isSRS && !isFlv) {
+                startNewWebRtc();
+            }
         });
 
         // 当前所有在线用户
         instance.socketIo.on(SocketMessage.roomNoLive, (data: IAdminIn) => {
             console.log('【websocket】收到管理员不在直播', data);
-            // roomNoLive.value = true;
-            // closeRtc();
+            roomNoLive.value = true;
+            closeRtc();
         });
 
         // 当前所有在线用户
@@ -282,23 +282,24 @@ export function usePull({
             });
             rtc.rtcStatus.joined = true;
             rtc.update();
-            if (track.video) {
+            // if (track.video) {
                 rtc.peerConnection?.addTransceiver('video', { direction: 'recvonly' });
-            }
-            if (track.audio) {
+            // }
+            // if (track.audio) {
                 rtc.peerConnection?.addTransceiver('audio', { direction: 'recvonly' });
-            }
+            // }
             try {
                 const offer = await rtc.createOffer();
                 if (!offer) return;
                 await rtc.setLocalDescription(offer);
                 const res: any = await fetchRTCPlayApi({
-                    api: `http://localhost:1985/rtc/v1/play/`,
+                    api: `http://192.168.192.131:1985/rtc/v1/play/`,
                     clientip: null,
                     sdp: offer.sdp!,
                     streamurl: streamurl.value,
                     tid: getRandomString(10),
                 });
+                console.log('res', res)
                 await rtc.setRemoteDescription(
                     new RTCSessionDescription({ type: 'answer', sdp: res.sdp })
                 );

@@ -18,6 +18,7 @@ function prettierInfo(
 
 export class SRSWebRTCClass {
   roomId = '-1';
+  videoEl;
 
   peerConnection: RTCPeerConnection | null = null;
   dataChannel: RTCDataChannel | null = null;
@@ -62,8 +63,9 @@ export class SRSWebRTCClass {
 
   localDescription: any;
 
-  constructor({ roomId }: { roomId: string }) {
+  constructor({ roomId, videoEl }: { roomId: string, videoEl: HTMLVideoElement }) {
     this.roomId = roomId;
+    this.videoEl = videoEl;
     this.browser = browserTool();
     this.createPeerConnection();
     this.update();
