@@ -2,7 +2,7 @@ import flvJs from 'flv.js'
 
 let flvPlayer: any
 
-export function useFlvPlay(flvUrl: string, videoEl: HTMLVideoElement) {
+export function useFlvPlay(flvUrl: string, videoEl: HTMLVideoElement, isDelete = true) {
 
     if (flvPlayer) {
         flvPlayer.detachMediaElement()
@@ -13,7 +13,6 @@ export function useFlvPlay(flvUrl: string, videoEl: HTMLVideoElement) {
         type: 'flv',
         url: flvUrl
     })
-
     flvPlayer.attachMediaElement(videoEl)
     flvPlayer.load()
 

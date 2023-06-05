@@ -293,13 +293,16 @@ export function usePush({
         // 其他用户加入房间
         instance.socketIo.on(SocketMessage.otherJoin, (data) => {
             console.log('【websocket】其他用户加入房间', data);
+            console.log(data)
             const content: Chat = {
                 msgType: ChatEnum.otherJoin,
                 socketId: data.socketId,
                 userInfo: data.data.userInfo,
                 msg: data.data.msg,
+                username: data.username,
             };
             chatList.value.push(content);
+            console.log(chatList)
             if (isSRS) return;
             if (joined.value) {
                 batchSendOffer();

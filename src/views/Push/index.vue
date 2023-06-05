@@ -74,7 +74,8 @@
                             </template>
                             <template v-else-if="item.msgType === ChatEnum.otherJoin">
                                 <span class="name system">系统通知：</span>
-                                <span class="msg">{{ item.socketId }}进入直播！</span>
+                                {{ item }}
+                                <span class="msg">{{ item.username }}进入直播！</span>
                             </template>
                             <template v-else-if="item.msgType === ChatEnum.userLeaved">
                                 <span class="name system">系统通知：</span>

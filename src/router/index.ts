@@ -26,7 +26,17 @@ const routes: Array<RouteRecordRaw> = [
                 path: routerPath.Push,
                 name: routerName.Push,
                 component: () => import(`@/views/${routerName.Push}/index.vue`)
-            }
+            },
+            {
+                path: routerPath.Attend,
+                name: routerName.Attend,
+                component: () => import(`@/views/${routerName.Attend}/index.vue`)
+            },
+            {
+                path: routerPath.Conference,
+                name: routerName.Conference,
+                component: () => import(`@/views/${routerName.Conference}/index.vue`)
+            },
         ]
     }
 ]

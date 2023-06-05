@@ -28,6 +28,7 @@ export function usePull({
     const chatList = ref<Chat[]>([]);
     const liveUserList = ref<ILiveUser[]>([]);
     const roomNoLive = ref(false);
+    const isLive = ref(false)
     const track = reactive({
         audio: true,
         video: true,
@@ -54,6 +55,7 @@ export function usePull({
 
     function sendJoin(roomId: string) {
         const instance = networkStore.wsMap.get(roomId);
+        if (!instance?.socketIo) return;
         instance.send({
             msgType: SocketMessage.join,
             data: { userInfo: userStore.userInfo },
@@ -70,7 +72,10 @@ export function usePull({
                 msgType: SocketMessage.heartbeat,
                 data: 'Websocket心跳机制'
             });
-        }, 1000 * 30);
+            if (isLive.value === false) {
+                sendJoin(roomId);
+            }
+        }, 1000);
     }
 
 
@@ -88,7 +93,6 @@ export function usePull({
 
     function initReveive() {
         const instance = networkStore.wsMap.get(roomId)!
-
         if (!instance?.socketIo) return;
         // websocket连接成功
         instance.socketIo.on(SocketStatus.connect, () => {
@@ -111,6 +115,7 @@ export function usePull({
             console.log('【websocket】收到管理员正在直播', data);
             if (isSRS && !isFlv) {
                 startNewWebRtc();
+                isLive.value = true
             }
         });
 
@@ -151,10 +156,10 @@ export function usePull({
             roomName.value = data.data.roomName;
             streamurl.value = data.data.streamUrl;
             flvurl.value = data.data.flvUrl;
-            if (isFlv) {
-                const { play } = useFlvPlay(flvurl.value, localVideoRef.value!)
-                play()
-            }
+            // if (isFlv) {
+            //     const { pause } = useFlvPlay(flvurl.value, localVideoRef.value!)
+            //     pause()
+            // }
             instance.send({ msgType: SocketMessage.getLiveUser });
         });
 
@@ -249,9 +254,9 @@ export function usePull({
 
     function initPull() {
         webSocketInit()
-        webRTCInit()
+        // webRTCInit()
         localVideoRef.value.addEventListener('loadstart', () => {
-            console.warn('视频流-loadstart');
+            console.log('视频流-loadstart');
             const rtc = networkStore.getRtcMap(roomId);
             if (!rtc) return;
             rtc.rtcStatus.loadstart = true;
@@ -259,7 +264,7 @@ export function usePull({
         });
 
         localVideoRef.value.addEventListener('loadedmetadata', () => {
-            console.warn('视频流-loadedmetadata');
+            console.log('视频流-loadedmetadata');
             const rtc = networkStore.getRtcMap(roomId);
             if (!rtc) return;
             rtc.rtcStatus.loadedmetadata = true;
@@ -285,7 +290,7 @@ export function usePull({
     /** 原生的webrtc时，receiver必传 */
     async function startNewWebRtc(receiver?: string) {
         if (isSRS) {
-            console.warn('开始new SRSWebRTCClass', getSocketId());
+            console.log('开始new SRSWebRTCClass', getSocketId());
             const rtc = new SRSWebRTCClass({
                 roomId: `${roomId}___${getSocketId()}`,
             });

@@ -123,6 +123,11 @@ instance!.socketIo!.on(SocketStatus.disconnect, () => {
   instance.update();
 });
 
+// onUnmounted(() => {
+//   const { pause } = useFlvPlay(currentLiveRoom.value?.flvUrl, videoRef.value!, false)
+//   pause()
+// })
+
 </script>
 
 <style lang="scss" scoped>

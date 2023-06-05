@@ -12,6 +12,7 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@fingerprintjs/fingerprintjs": "^3.4.1",
     "@nplayer/vue": "^1.0.12",
     "axios": "^1.4.0",
     "billd-utils": "^0.0.11",
