@@ -5,10 +5,10 @@
       <video v-if="currentLiveRoom?.flvUrl" ref="videoRef" id="localVideo" controls autoplay muted></video>
       <template v-if="currentLiveRoom">
         <div class="join-btn">
-          <div class="btn webrtc" @click="joinRoom()">
+          <div v-if="currentLiveRoom?.streamUrl" class="btn webrtc" @click="joinRoom()">
             进入直播（webrtc）
           </div>
-          <div v-if="currentLiveRoom?.flvUrl" class="btn flv" @click="joinFlvRoom()">
+          <div v-if="currentLiveRoom?.flvUrl && currentLiveRoom?.isLive === 0" class="btn flv" @click="joinFlvRoom()">
             进入直播（flv）
           </div>
         </div>
@@ -35,28 +35,23 @@
 
 <script setup lang="ts">
 import { liveTypeEnum } from '@/types';
-import { PlatformEnum } from '../../types/index';
+import { SocketStatus } from '@/types/websocket';
+import { getDanmuData } from '@/utils/danmu';
+import { WebSocketClass } from '@/utils/webSocket';
+
+
+export interface danmakuType {
+  time: number,
+  color: string,
+  type: number,
+  text: string,
+}
 
 const videoRef = ref<HTMLVideoElement>();
 const liveRoomList = ref<any[]>([])
 const currentLiveRoom = ref()
 const router = useRouter();
-
-async function fetchLiveList() {
-  try {
-    const { data } = await fetchLiveListApi()
-    liveRoomList.value = data;
-    currentLiveRoom.value = data[0];
-    nextTick(() => {
-      if (currentLiveRoom.value?.flvUrl) {
-        const { play } = useFlvPlay(currentLiveRoom.value?.flvUrl, videoRef.value!) 
-        play()
-      }
-    });
-  } catch (error) {
-    console.log(error);
-  }
-}
+const networkStore = useNetworkStore();
 
 function changeLive(item: any) {
   const { pause } = useFlvPlay(currentLiveRoom.value?.flvUrl, videoRef.value!)
@@ -93,9 +88,40 @@ function joinFlvRoom() {
   });
 }
 
-onMounted(() => {
-  fetchLiveList()
-})
+const websocket = new WebSocketClass({
+  roomId: 'home',
+  url: 'http://192.168.192.131:3000',
+  isAdmin: false,
+});
+websocket.update();
+
+const instance = networkStore.wsMap.get('home')!
+
+instance!.socketIo!.on(SocketStatus.connect, () => {
+  console.log('Home websocket连接成功');
+  instance.socketIo?.emit('live')
+  instance.status = SocketStatus.connect;
+  instance.update();
+});
+
+instance!.socketIo!.on('live', (data: any[]) => {
+  if (!currentLiveRoom.value) {
+    currentLiveRoom.value = data[0];
+    nextTick(() => {
+      if (currentLiveRoom.value?.flvUrl) {
+        const { play } = useFlvPlay(currentLiveRoom.value?.flvUrl, videoRef.value!)
+        play()
+      }
+    });
+  }
+  liveRoomList.value = data;
+});
+
+instance!.socketIo!.on(SocketStatus.disconnect, () => {
+  console.log('【websocket】websocket连接断开');
+  instance.status = SocketStatus.disconnect;
+  instance.update();
+});
 
 </script>
 

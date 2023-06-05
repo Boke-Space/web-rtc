@@ -1,6 +1,6 @@
 import { getRandomString } from 'billd-utils';
 
-import { type IDanmu, type ILiveUser, DanmuMsgTypeEnum, type IOffer, type IAdminIn, type ICandidate } from "@/types";
+import { type ILiveUser, type IOffer, type IAdminIn, type ICandidate, type Chat, ChatEnum } from "@/types";
 import { SRSWebRTCClass } from "@/utils/srsWebRtc";
 import { WebRTCClass } from "@/utils/webRtc";
 import { SocketMessage, SocketStatus } from '@/types/websocket';
@@ -24,8 +24,8 @@ export function usePull({
     const roomName = ref('');
     const streamurl = ref('');
     const flvurl = ref('');
-    const danmuStr = ref('');
-    const damuList = ref<IDanmu[]>([]);
+    const chat = ref('');
+    const chatList = ref<Chat[]>([]);
     const liveUserList = ref<ILiveUser[]>([]);
     const roomNoLive = ref(false);
     const track = reactive({
@@ -134,6 +134,15 @@ export function usePull({
         // 收到用户发送消息
         instance.socketIo.on(SocketMessage.message, (data) => {
             console.log('【websocket】收到用户发送消息', data);
+            const content: Chat = {
+                msgType: ChatEnum.chat,
+                socketId: data.socketId,
+                userInfo: data.data.userInfo,
+                msg: data.data.msg,
+                color: data.data.color,
+            };
+            chatList.value.push(content);
+            console.log(chatList.value)
         });
 
         // 用户加入房间
@@ -282,16 +291,18 @@ export function usePull({
             });
             rtc.rtcStatus.joined = true;
             rtc.update();
-            // if (track.video) {
+            // 检查是否含视频和音频轨道
+            if (track.video) {
                 rtc.peerConnection?.addTransceiver('video', { direction: 'recvonly' });
-            // }
-            // if (track.audio) {
+            }
+            if (track.audio) {
                 rtc.peerConnection?.addTransceiver('audio', { direction: 'recvonly' });
-            // }
+            }
             try {
                 const offer = await rtc.createOffer();
                 if (!offer) return;
                 await rtc.setLocalDescription(offer);
+                // offer 对象发送给服务器，以便服务器将其转发给远程客户端
                 const res: any = await fetchRTCPlayApi({
                     api: `http://192.168.192.131:1985/rtc/v1/play/`,
                     clientip: null,
@@ -299,7 +310,6 @@ export function usePull({
                     streamurl: streamurl.value,
                     tid: getRandomString(10),
                 });
-                console.log('res', res)
                 await rtc.setRemoteDescription(
                     new RTCSessionDescription({ type: 'answer', sdp: res.sdp })
                 );
@@ -317,28 +327,28 @@ export function usePull({
         const key = event.key.toLowerCase();
         if (key === 'enter') {
             event.preventDefault();
-            sendDanmu();
+            sendMessage();
         }
     }
 
-    function sendDanmu() {
-        if (!danmuStr.value.trim().length) {
-            // window.$message.warning('请输入弹幕内容！');
+    function sendMessage() {
+        if (!chat.value.trim().length) {
             return;
         }
         const instance = networkStore.wsMap.get(roomId);
-        const danmu: IDanmu = {
+        const content: Chat = {
             socketId: getSocketId(),
             userInfo: userStore.userInfo,
-            msgType: DanmuMsgTypeEnum.danmu,
-            msg: danmuStr.value,
+            msgType: ChatEnum.chat,
+            msg: chat.value,
+            color: '#87ceeb',
         };
         instance.send({
             msgType: SocketMessage.message,
-            data: danmu,
+            data: content,
         });
-        damuList.value.push(danmu);
-        danmuStr.value = '';
+        chatList.value.push(content);
+        chat.value = '';
     }
 
     return {
@@ -347,11 +357,11 @@ export function usePull({
         closeRtc,
         getSocketId,
         keydownDanmu,
-        sendDanmu,
+        sendMessage,
         roomName,
         roomNoLive,
-        damuList,
+        chatList,
         liveUserList,
-        danmuStr,
+        chat,
     };
 }

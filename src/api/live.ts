@@ -7,3 +7,9 @@ export const fetchLiveListApi = () => service.get<Data>({
         orderBy: 'desc'
     }
 })
+
+export const deleteLiveListApi = (params = {}) => service.delete<Data>({
+    url: '/live',
+    params
+})
+

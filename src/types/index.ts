@@ -116,8 +116,8 @@ export enum MediaTypeEnum {
     screen,
 }
 
-export enum DanmuMsgTypeEnum {
-    danmu,
+export enum ChatEnum {
+    chat,
     otherJoin,
     userLeaved,
 }
@@ -127,11 +127,12 @@ export interface ILiveUser {
     userInfo?: IUser;
 }
 
-export interface IDanmu {
-    msgType: DanmuMsgTypeEnum;
+export interface Chat {
+    msgType: ChatEnum;
     msg: string;
     socketId: string;
     userInfo?: IUser;
+    color?: string
 }
 
 export interface IAdminIn {

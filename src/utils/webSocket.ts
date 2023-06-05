@@ -54,15 +54,14 @@ export enum WsMsgTypeEnum {
   candidate = 'candidate',
 }
 
-
 export class WebSocketClass {
-  socketIo: Socket | null = null;
+  socketIo?: Socket | null = null;
   status: SocketStatus = SocketStatus.disconnect;
   url = '';
   roomId = '-1';
   isAdmin = false;
 
-  constructor({ roomId, url, isAdmin }: {roomId: string, url: string, isAdmin: boolean }) {
+  constructor({ roomId = '', url, isAdmin }: {roomId?: string, url: string, isAdmin: boolean }) {
     if (!window.WebSocket) {
       alert('当前环境不支持WebSocket！');
       return;

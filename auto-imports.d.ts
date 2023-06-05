@@ -12,6 +12,7 @@ declare global {
   const defineAsyncComponent: typeof import('vue')['defineAsyncComponent']
   const defineComponent: typeof import('vue')['defineComponent']
   const defineStore: typeof import('pinia')['defineStore']
+  const deleteLiveListApi: typeof import('./src/api/live')['deleteLiveListApi']
   const effectScope: typeof import('vue')['effectScope']
   const fetchLiveListApi: typeof import('./src/api/live')['fetchLiveListApi']
   const fetchRTCPlayApi: typeof import('./src/api/srs')['fetchRTCPlayApi']

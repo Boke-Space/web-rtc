@@ -1,7 +1,7 @@
 import { getRandomString } from 'billd-utils';
 
 import { type Ref } from 'vue';
-import { type IDanmu, type ILiveUser, DanmuMsgTypeEnum, type IOffer, type IAdminIn, type ICandidate, MediaTypeEnum } from "@/types";
+import { type IDanmu, type ILiveUser, DanmuMsgTypeEnum, type IOffer, type IAdminIn, type ICandidate, MediaTypeEnum, type Chat, ChatEnum } from "@/types";
 import { SRSWebRTCClass } from "@/utils/srsWebRtc";
 import { WebRTCClass } from "@/utils/webRtc";
 import { SocketMessage, SocketStatus } from '@/types/websocket';
@@ -32,12 +32,12 @@ export function usePush({
     const networkStore = useNetworkStore();
     const userStore = useUserStore();
 
-    const roomId = ref<string>(getRandomString(15));
-    const danmuStr = ref('');
+    const roomId = getRandomString(15)
     const roomName = ref('');
     const isDone = ref(false);
     const joined = ref(false);
-    const disabled = ref(false);
+    const startDisabled = ref(true);
+    const endDisabled = ref(true);
     const localStream = ref();
     const offerSended = ref(new Set());
     const hooksRtcMap = ref(new Set());
@@ -48,13 +48,14 @@ export function usePush({
     });
 
     const streamurl = ref(
-        `webrtc://192.168.192.131/live/${roomId.value}`
+        `webrtc://192.168.192.131/live/${roomId}`
     );
     const flvurl = ref(
-        `http://192.168.192.131:5001/live/${roomId.value}.flv`
+        `http://192.168.192.131:5001/live/${roomId}.flv`
     );
 
-    const damuList = ref<IDanmu[]>([]);
+    const chat = ref('');
+    const chatList = ref<Chat[]>([]);
     const liveUserList = ref<ILiveUser[]>([]);
 
     const allMediaTypeList = {
@@ -72,12 +73,12 @@ export function usePush({
     const currMediaType = ref<MediaType>();
 
     function getSocketId() {
-        return networkStore.wsMap.get(roomId.value!)?.socketIo?.id || '-1';
+        return networkStore.wsMap.get(roomId!)?.socketIo?.id || '-1';
     }
 
     function confirmRoomName() {
         if (!roomNameIsOk()) return;
-        disabled.value = true;
+        startDisabled.value = false
     }
 
     function roomNameIsOk() {
@@ -135,7 +136,8 @@ export function usePush({
             errorMessage('请选择一个素材！')
             return;
         }
-        disabled.value = true;
+        startDisabled.value = true
+        endDisabled.value = false
         initReceive();
         if (isSRS) {
             sendJoin();
@@ -144,15 +146,16 @@ export function usePush({
 
     function webSocketInit() {
         const ws = new WebSocketClass({
-            roomId: roomId.value,
+            roomId: roomId,
             url: 'ws://192.168.192.131:3000',
             isAdmin: true,
         });
         ws.update();
     }
 
+    // WebSocket 实现了 WebRTC 信令交互 offer，answer，candidate 的交换
     function initReceive() {
-        const instance = networkStore.wsMap.get(roomId.value)!
+        const instance = networkStore.wsMap.get(roomId)!
 
         if (!instance?.socketIo) return;
         // websocket连接成功
@@ -160,85 +163,87 @@ export function usePush({
             console.log('【websocket】websocket连接成功');
             instance.status = SocketStatus.connect;
             instance.update();
-            if (!isSRS) {
-                sendJoin();
-            }
+            // if (!isSRS) {
+            //     sendJoin();
+            // }
         });
 
         // websocket连接断开
-        instance.socketIo.on(SocketStatus.disconnect, () => {
+        instance.socketIo.on(SocketStatus.disconnect, async () => {
             console.log('【websocket】websocket连接断开');
             instance.status = SocketStatus.disconnect;
             instance.update();
+            console.log(roomId)
+            await deleteLiveListApi({ roomId })
         });
 
         // WebRTC 收到offer
-        instance.socketIo.on(SocketMessage.offer, async (data: IOffer) => {
-            console.warn('【websocket】收到offer', data);
-            if (isSRS) return;
-            if (!instance) return;
-            if (data.data.receiver === getSocketId()) {
-                console.log('收到offer，这个offer是发给我的');
-                const rtc = await startNewWebRtc(data.data.sender);
-                if (rtc) {
-                    await rtc.setRemoteDescription(data.data.sdp);
-                    const sdp = await rtc.createAnswer();
-                    await rtc.setLocalDescription(sdp);
-                    instance.send({
-                        msgType: SocketMessage.answer,
-                        data: { sdp, sender: getSocketId(), receiver: data.data.sender },
-                    });
-                }
-            } else {
-                console.log('收到offer，但是这个offer不是发给我的');
-            }
-        });
+        // instance.socketIo.on(SocketMessage.offer, async (data: IOffer) => {
+        //     console.warn('【websocket】收到offer', data);
+        //     if (isSRS) return;
+        //     if (!instance) return;
+        //     if (data.data.receiver === getSocketId()) {
+        //         console.log('收到offer，这个offer是发给我的');
+        //         const rtc = await startNewWebRtc(data.data.sender);
+        //         if (rtc) {
+        //             await rtc.setRemoteDescription(data.data.sdp);
+        //             const sdp = await rtc.createAnswer();
+        //             await rtc.setLocalDescription(sdp);
+        //             instance.send({
+        //                 msgType: SocketMessage.answer,
+        //                 data: { sdp, sender: getSocketId(), receiver: data.data.sender },
+        //             });
+        //         }
+        //     } else {
+        //         console.log('收到offer，但是这个offer不是发给我的');
+        //     }
+        // });
 
         // WebRTC 收到answer
-        instance.socketIo.on(SocketMessage.answer, async (data: IOffer) => {
-            console.warn('【websocket】收到answer', data);
-            if (isSRS) return;
-            if (isDone.value) return;
-            if (!instance) return;
-            const rtc = networkStore.getRtcMap(`${roomId.value}___${data.socketId}`);
-            if (!rtc) return;
-            rtc.rtcStatus.answer = true;
-            rtc.update();
-            if (data.data.receiver === getSocketId()) {
-                console.log('收到answer，这个answer是发给我的');
-                await rtc.setRemoteDescription(data.data.sdp);
-            } else {
-                console.log('收到answer，但这个answer不是发给我的');
-            }
-        });
+        // instance.socketIo.on(SocketMessage.answer, async (data: IOffer) => {
+        //     console.warn('【websocket】收到answer', data);
+        //     if (isSRS) return;
+        //     if (isDone.value) return;
+        //     if (!instance) return;
+        //     const rtc = networkStore.getRtcMap(`${roomId}___${data.socketId}`);
+        //     if (!rtc) return;
+        //     rtc.rtcStatus.answer = true;
+        //     rtc.update();
+        //     if (data.data.receiver === getSocketId()) {
+        //         console.log('收到answer，这个answer是发给我的');
+        //         await rtc.setRemoteDescription(data.data.sdp);
+        //     } else {
+        //         console.log('收到answer，但这个answer不是发给我的');
+        //     }
+        // });
 
         // WebRTC 收到candidate
-        instance.socketIo.on(SocketMessage.candidate, (data: ICandidate) => {
-            console.warn('【websocket】收到candidate', data);
-            if (isSRS) return;
-            if (isDone.value) return;
-            if (!instance) return;
-            const rtc = networkStore.getRtcMap(`${roomId.value}___${data.socketId}`);
-            if (!rtc) return;
-            if (data.socketId !== getSocketId()) {
-                console.log('不是我发的candidate');
-                const candidate = new RTCIceCandidate({
-                    sdpMid: data.data.sdpMid,
-                    sdpMLineIndex: data.data.sdpMLineIndex,
-                    candidate: data.data.candidate,
-                });
-                rtc.peerConnection
-                    ?.addIceCandidate(candidate)
-                    .then(() => {
-                        console.log('candidate成功');
-                    })
-                    .catch((err) => {
-                        console.error('candidate失败', err);
-                    });
-            } else {
-                console.log('是我发的candidate');
-            }
-        });
+        // instance.socketIo.on(SocketMessage.candidate, (data: ICandidate) => {
+        //     console.warn('【websocket】收到candidate', data);
+        //     if (isSRS) return;
+        //     if (isDone.value) return;
+        //     if (!instance) return;
+        //     const rtc = networkStore.getRtcMap(`${roomId}___${data.socketId}`);
+        //     if (!rtc) return;
+        //     if (data.socketId !== getSocketId()) {
+        //         console.log('不是我发的candidate');
+        //         const candidate = new RTCIceCandidate({
+        //             sdpMid: data.data.sdpMid,
+        //             sdpMLineIndex: data.data.sdpMLineIndex,
+        //             candidate: data.data.candidate,
+        //         });
+        //         rtc.peerConnection
+        //             ?.addIceCandidate(candidate)
+        //             .then(() => {
+        //                 console.log('candidate成功');
+        //             })
+        //             .catch((err) => {
+        //                 console.error('candidate失败', err);
+        //             });
+        //     } else {
+        //         console.log('是我发的candidate');
+        //     }
+        // });
 
         // 当前所有在线用户
         instance.socketIo.on(SocketMessage.roomLiveing, (data: IAdminIn) => {
@@ -263,6 +268,15 @@ export function usePush({
         // 收到用户发送消息
         instance.socketIo.on(SocketMessage.message, (data) => {
             console.log('【websocket】收到用户发送消息', data);
+            const content: Chat = {
+                msgType: ChatEnum.chat,
+                socketId: data.socketId,
+                userInfo: data.data.userInfo,
+                msg: data.data.msg,
+                color: data.data.color,
+            };
+            chatList.value.push(content);
+            console.log(chatList.value)
         });
 
         // 用户加入房间
@@ -279,6 +293,14 @@ export function usePush({
         // 其他用户加入房间
         instance.socketIo.on(SocketMessage.otherJoin, (data) => {
             console.log('【websocket】其他用户加入房间', data);
+            const content: Chat = {
+                msgType: ChatEnum.otherJoin,
+                socketId: data.socketId,
+                userInfo: data.data.userInfo,
+                msg: data.data.msg,
+            };
+            chatList.value.push(content);
+            if (isSRS) return;
             if (joined.value) {
                 batchSendOffer();
             }
@@ -290,6 +312,12 @@ export function usePush({
             instance.socketIo?.emit(SocketMessage.leave, {
                 roomId: instance.roomId,
             });
+            const content: Chat = {
+                msgType: ChatEnum.userLeaved,
+                socketId: data.socketId,
+                msg: data.data.msg,
+            };
+            chatList.value.push(content);
         });
 
         // 用户离开房间完成
@@ -302,8 +330,29 @@ export function usePush({
         });
     }
 
+    function sendMessage() {
+        if (!chat.value.trim().length) {
+            return;
+        }
+        const instance = networkStore.wsMap.get(roomId);
+        const content: Chat = {
+            socketId: getSocketId(),
+            userInfo: userStore.userInfo,
+            msgType: ChatEnum.chat,
+            msg: chat.value,
+            color: '#87ceeb',
+        };
+        instance.send({
+            msgType: SocketMessage.message,
+            data: content,
+        });
+        chatList.value.push(content);
+        chat.value = '';
+    }
+
+    // 发送加入房间信令
     function sendJoin() {
-        const instance = networkStore.wsMap.get(roomId.value);
+        const instance = networkStore.wsMap.get(roomId);
         if (!instance) return;
         instance.send({
             msgType: SocketMessage.join,
@@ -324,17 +373,17 @@ export function usePush({
 
     /** 结束直播 */
     function endLive() {
-        disabled.value = false;
-        // closeRtc();
+        startDisabled.value = false
+        endDisabled.value = true
+        closeRtc();
         currMediaTypeList.value = [];
         localStream.value = null;
         localVideoRef.value!.srcObject = null;
-        // const instance = networkStore.wsMap.get(roomId.value);
-        // if (!instance) return;
-        // instance.send({
-        //     msgType: SocketMessage.roomNoLive,
-        //     data: {},
-        // });
+        const instance = networkStore.wsMap.get(roomId);
+        if (!instance) return;
+        instance.send({
+            msgType: SocketMessage.roomNoLive,
+        });
         // setTimeout(() => {
         //     instance.close();
         // }, 500);
@@ -346,7 +395,7 @@ export function usePush({
             if (item.socketId !== getSocketId()) {
                 localStream.value.getTracks().forEach((track) => {
                     const rtc = networkStore.getRtcMap(
-                        `${roomId.value}___${item.socketId}`
+                        `${roomId}___${item.socketId}`
                     );
                     rtc?.addTrack(track, localStream.value);
                 });
@@ -362,9 +411,9 @@ export function usePush({
         receiver: string;
     }) {
         if (isDone.value) return;
-        const instance = networkStore.wsMap.get(roomId.value);
+        const instance = networkStore.wsMap.get(roomId);
         if (!instance) return;
-        const rtc = networkStore.getRtcMap(`${roomId.value}___${receiver}`);
+        const rtc = networkStore.getRtcMap(`${roomId}___${receiver}`);
         if (!rtc) return;
         const sdp = await rtc.createOffer();
         await rtc.setLocalDescription(sdp);
@@ -377,11 +426,14 @@ export function usePush({
     /** 原生的webrtc时，receiver必传 */
     async function startNewWebRtc(receiver?: string) {
         if (isSRS) {
-            console.warn('开始new SRSWebRTCClass');
+            console.log('开始new SRSWebRTCClass');
             const rtc = new SRSWebRTCClass({
-                roomId: `${roomId.value}___${getSocketId()}`,
+                roomId: `${roomId}___${getSocketId()}`,
                 videoEl: localVideoRef.value!,
             });
+
+            // 音视频轨道添加到WebRTC连接中
+            console.log('音视频轨道添加到WebRTC连接中')
             localStream.value.getTracks().forEach((track) => {
                 rtc.addTrack({
                     track,
@@ -389,10 +441,12 @@ export function usePush({
                     direction: 'sendonly',
                 });
             });
+
             try {
                 const offer = await rtc.createOffer();
                 if (!offer) return;
                 await rtc.setLocalDescription(offer);
+                // offer 对象发送给服务器，以便服务器将其转发给远程客户端
                 const res: any = await fetchRtcPublish({
                     api: `http://192.168.192.131:1985/rtc/v1/publish/`,
                     clientip: null,
@@ -400,7 +454,6 @@ export function usePush({
                     streamurl: streamurl.value,
                     tid: getRandomString(10),
                 });
-                console.log(res)
                 await rtc.setRemoteDescription(
                     new RTCSessionDescription({ type: 'answer', sdp: res.sdp })
                 );
@@ -410,7 +463,7 @@ export function usePush({
         } else {
             console.warn('开始new WebRTCClass');
             const rtc = new SRSWebRTCClass({
-                roomId: `${roomId.value}___${receiver!}`,
+                roomId: `${roomId}___${receiver!}`,
                 videoEl: localVideoRef.value!,
             });
             return rtc;
@@ -436,21 +489,34 @@ export function usePush({
         });
     }
 
+
+    async function closeWs() {
+        const instance = networkStore.wsMap.get(roomId);
+        instance?.close();
+    }
+
+    async function closeRtc() {
+        networkStore.rtcMap.forEach((rtc) => {
+            rtc.close();
+        });
+    }
+
     async function initPush() {
         // 跳转到指定房间
-        router.push({ query: { ...route.query, roomId: roomId.value } });
+        router.push({ query: { ...route.query, roomId: roomId } });
         // 获取媒体设备信息
         const all = await getAllMediaDevices();
         allMediaTypeList[MediaTypeEnum.camera] = {
             txt: all.find((item) => item.kind === 'videoinput')?.label || '摄像头',
             type: MediaTypeEnum.camera,
         };
-
+        // 连接WebSocket
         webSocketInit()
 
+        //  监听视频流的加载状态 
         localVideoRef.value?.addEventListener('loadstart', () => {
             console.warn('视频流-loadstart');
-            const rtc = networkStore.getRtcMap(roomId.value);
+            const rtc = networkStore.getRtcMap(roomId);
             if (!rtc) return;
             rtc.rtcStatus.loadstart = true;
             rtc.update();
@@ -458,7 +524,7 @@ export function usePush({
 
         localVideoRef.value?.addEventListener('loadedmetadata', () => {
             console.warn('视频流-loadedmetadata');
-            const rtc = networkStore.getRtcMap(roomId.value);
+            const rtc = networkStore.getRtcMap(roomId);
             if (!rtc) return;
             rtc.rtcStatus.loadedmetadata = true;
             rtc.update();
@@ -477,10 +543,16 @@ export function usePush({
         liveUserList,
         startGetDisplayMedia,
         startGetUserMedia,
-        disabled,
+        startDisabled,
+        endDisabled,
         endLive,
         startLive,
         roomName,
         confirmRoomName,
+        closeWs,
+        closeRtc,
+        chat,
+        chatList,
+        sendMessage,
     };
 }

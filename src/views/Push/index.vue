@@ -2,7 +2,15 @@
     <div class="webrtc-push-wrap">
         <div ref="topRef" class="left">
             <div class="video-wrap">
-                <video id="localVideo" ref="localVideoRef" autoplay muted></video>
+                <vue-danmaku v-model:danmus="chatList" isSuspend v-bind="config">
+                    <video id="localVideo" ref="localVideoRef" autoplay muted controls></video>
+                    <!-- 弹幕slot -->
+                    <template v-slot:dm="{ danmu }">
+                        <div class="danmu-item">
+                            <span :style="{ color: `${danmu.color}`}">{{ danmu.msg }}</span>
+                        </div>
+                    </template>
+                </vue-danmaku>
                 <div v-if="(!currMediaTypeList) || (currMediaTypeList.length <= 0)" class="add-wrap">
                     <el-button class="item" type="primary" @click="startGetUserMedia">
                         摄像头
@@ -18,8 +26,8 @@
                     <div class="detail">
                         <div class="top">
                             <el-input v-model="roomName" size="small" placeholder="输入房间名" :style="{ width: '50%' }"
-                                :disabled="disabled" />
-                            <el-button size="small" type="primary" :disabled="disabled" @click="confirmRoomName">
+                                />
+                            <el-button size="small" type="primary" @click="confirmRoomName">
                                 确定
                             </el-button>
                         </div>
@@ -36,10 +44,10 @@
                         </span>
                     </div>
                     <div class="bottom">
-                        <el-button class="item" type="primary" @click="startLive">
+                        <el-button class="item" type="primary" @click="startLive" :disabled="startDisabled">
                             开始直播
                         </el-button>
-                        <el-button class="item" type="primary" @click="endLive">
+                        <el-button class="item" type="primary" @click="endLive" :disabled="endDisabled">
                             结束直播
                         </el-button>
                     </div>
@@ -55,20 +63,20 @@
                     </div>
                 </div>
             </div>
-            <!-- <div class="danmu-card">
+            <div class="danmu-card">
                 <div class="title">弹幕互动</div>
-                <div class="list-wrap">
+                <div class="list-wrap" ref="chatRef">
                     <div class="list">
-                        <div v-for="(item, index) in damuList" :key="index" class="item">
-                            <template v-if="item.msgType === DanmuMsgTypeEnum.danmu">
+                        <div v-for="(item, index) in chatList" :key="index" class="item">
+                            <template v-if="item.msgType === ChatEnum.chat">
                                 <span class="name">{{ item.socketId }}：</span>
                                 <span class="msg">{{ item.msg }}</span>
                             </template>
-                            <template v-else-if="item.msgType === DanmuMsgTypeEnum.otherJoin">
+                            <template v-else-if="item.msgType === ChatEnum.otherJoin">
                                 <span class="name system">系统通知：</span>
                                 <span class="msg">{{ item.socketId }}进入直播！</span>
                             </template>
-                            <template v-else-if="item.msgType === DanmuMsgTypeEnum.userLeaved">
+                            <template v-else-if="item.msgType === ChatEnum.userLeaved">
                                 <span class="name system">系统通知：</span>
                                 <span class="msg">{{ item.socketId }}离开直播！</span>
                             </template>
@@ -76,20 +84,21 @@
                     </div>
                 </div>
                 <div class="send-msg">
-                    <input v-model="danmuStr" class="ipt" @keydown="keydownDanmu" />
-                    <n-button type="info" size="small" @click="sendDanmu">
+                    <input v-model="chat" class="ipt" />
+                    <n-button type="info" size="small" @click="sendMessage">
                         发送
                     </n-button>
                 </div>
-            </div> -->
+            </div>
         </div>
     </div>
 </template>
 
 <script lang="ts" setup>
-import { liveTypeEnum } from '@/types';
+import { ChatEnum, liveTypeEnum } from '@/types';
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import vueDanmaku from 'vue3-danmaku'
 
 const route = useRoute();
 const userStore = useUserStore();
@@ -98,6 +107,19 @@ const topRef = ref<HTMLDivElement>();
 const bottomRef = ref<HTMLDivElement>();
 const localVideoRef = ref<HTMLVideoElement>();
 const liveType = route.query.liveType;
+const chatRef = ref<HTMLDivElement | null>(null)
+
+
+const config = reactive({
+    useSlot: true, // 是否开启slot
+    loop: false, // 是否开启弹幕循环
+    speeds: 200, // 弹幕速度，实际为弹幕滚动完一整屏的秒数，值越小速度越快
+    fontSize: 20, // 文本模式下的字号
+    top: 10, // 弹幕轨道间的垂直间距
+    right: 0, // 同一轨道弹幕的水平间距
+    debounce: 100, // 弹幕刷新频率（多少毫秒插入一条弹幕，建议不小于50）
+    randomChannel: true, // 随机弹幕轨道
+})
 
 const {
     initPush,
@@ -109,17 +131,18 @@ const {
     startLive,
     endLive,
     roomName,
-    disabled,
+    startDisabled,
+    endDisabled,
     confirmRoomName,
+    closeWs,
+    closeRtc,
+    chat,
+    chatList,
+    sendMessage
 } = usePush({
     localVideoRef,
     isSRS: liveType === liveTypeEnum.srsPush,
 });
-
-// onUnmounted(() => {
-//     closeWs();
-//     closeRtc();
-// });
 
 onMounted(() => {
     initPush();
@@ -130,8 +153,15 @@ onMounted(() => {
         localVideoRef.value.style.height = `${res}px`;
     }
 });
+
+onUnmounted(() => {
+    closeWs();
+    closeRtc();
+});
+
+watch(chatList, () => nextTick(() => chatRef.value!.scrollTop = chatRef.value?.scrollHeight!), { deep: true})
 </script>
-  
+
 <style lang="scss" scoped>
 .webrtc-push-wrap {
     margin: 20px auto 0;
@@ -298,6 +328,10 @@ onMounted(() => {
 
             .title {
                 margin-bottom: 10px;
+            }
+
+            .list-wrap {
+                overflow-y: scroll;
             }
 
             .list {

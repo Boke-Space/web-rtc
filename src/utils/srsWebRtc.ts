@@ -71,8 +71,9 @@ export class SRSWebRTCClass {
     this.update();
   }
 
+  // 推流 音视频轨道添加到WebRTC连接中
   addTrack = ({ track, stream, direction }) => {
-    console.warn('addTrackaddTrack', track, stream);
+    console.log('addTrack', track.kind);
     this.sender = this.peerConnection?.addTransceiver(track, {
       streams: [stream],
       direction,
@@ -80,66 +81,54 @@ export class SRSWebRTCClass {
     // this.peerConnection?.addTrack(track, stream);
   };
 
+  // 拉流 本地媒体流添加到 peerConnection 中
   addStream = (stream) => {
-    console.warn('addStreamaddStream', stream);
+    console.log('addStream');
     if (!this.peerConnection) return;
     this.rtcStatus.addStream = true;
     this.update();
     document.querySelector<HTMLVideoElement>('#localVideo')!.srcObject = stream;
-    prettierInfo('addStream成功', { browser: this.browser.browser }, 'warn');
   };
 
+  // 监听 WebRTC视频流的事件
   initStreamEvent = () => {
-    console.warn(`${this.roomId}，开始监听pc的addstream`);
-    // 弃用
+    console.log(`开始监听pc的addstream`);
+
+    // 拉流
     this.peerConnection?.addEventListener('addstream', (event: any) => {
-      console.warn(`${this.roomId}，pc收到addstream事件`, event, event.stream);
+      console.log(`pc收到addstream事件`);
       this.addStream(event.stream);
     });
 
-    console.warn(`${this.roomId}，开始监听pc的ontrack`);
     this.peerConnection?.addEventListener('ontrack', (event: any) => {
-      console.warn(`${this.roomId}，pc收到ontrack事件`, event);
+      console.log(`${this.roomId}，pc收到ontrack事件`, event);
       this.addStream(event.streams[0]);
     });
+  };
 
-    console.warn(`${this.roomId}，开始监听pc的addtrack`);
-    this.peerConnection?.addEventListener('addtrack', (event: any) => {
-      console.warn(`${this.roomId}，pc收到addtrack事件`, event);
-    });
-
-    console.warn(`${this.roomId}，开始监听pc的track`);
-    // 弃用
-    this.peerConnection?.addEventListener('track', (event: any) => {
-      console.warn(`${this.roomId}，pc收到track事件`, event);
-      this.addStream(event.streams[0]);
-      // document.querySelector<HTMLVideoElement>('#localVideo')!.srcObject =
-      //   event.streams[0];
-    });
+  // 创建对等连接
+  createPeerConnection = () => {
+    if (!this.peerConnection) {
+      this.peerConnection = new RTCPeerConnection();
+      console.log('创建对等连接 RTCPeerConnection')
+      this.startConnect();
+      this.update();
+    }
   };
 
   // 创建offer
   createOffer = async () => {
     if (!this.peerConnection) return;
-    prettierInfo('createOffer开始', { browser: this.browser.browser }, 'warn');
     try {
+      // SDP
       const description = await this.peerConnection.createOffer();
       this.localDescription = description;
+      // 已成功创建Offer
       this.rtcStatus.createOffer = true;
       this.update();
-      prettierInfo(
-        'createOffer成功',
-        { browser: this.browser.browser },
-        'warn'
-      );
-      console.log('createOffer', description);
+      console.log('createOffer');
       return description;
     } catch (error) {
-      prettierInfo(
-        'createOffer失败',
-        { browser: this.browser.browser },
-        'error'
-      );
       console.log(error);
     }
   };
@@ -147,28 +136,12 @@ export class SRSWebRTCClass {
   // 设置本地描述
   setLocalDescription = async (description) => {
     if (!this.peerConnection) return;
-    prettierInfo(
-      'setLocalDescription开始',
-      { browser: this.browser.browser },
-      'warn'
-    );
     try {
       await this.peerConnection.setLocalDescription(description);
       this.rtcStatus.setLocalDescription = true;
       this.update();
-      prettierInfo(
-        'setLocalDescription成功',
-        { browser: this.browser.browser },
-        'warn'
-      );
-      console.log(description);
+      console.log('localDescription');
     } catch (error) {
-      prettierInfo(
-        'setLocalDescription失败',
-        { browser: this.browser.browser },
-        'error'
-      );
-      console.log('setLocalDescription', description);
       console.log(error);
     }
   };
@@ -176,30 +149,12 @@ export class SRSWebRTCClass {
   // 设置远端描述
   setRemoteDescription = async (description) => {
     if (!this.peerConnection) return;
-    prettierInfo(
-      `setRemoteDescription开始`,
-      { browser: this.browser.browser },
-      'warn'
-    );
     try {
-      await this.peerConnection.setRemoteDescription(
-        new RTCSessionDescription(description)
-      );
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(description));
       this.rtcStatus.setRemoteDescription = true;
       this.update();
-      prettierInfo(
-        'setRemoteDescription成功',
-        { browser: this.browser.browser },
-        'warn'
-      );
-      console.log(description);
+      console.log('remoteDescription');
     } catch (error) {
-      prettierInfo(
-        'setRemoteDescription失败',
-        { browser: this.browser.browser },
-        'error'
-      );
-      console.log('setRemoteDescription', description);
       console.log(error);
     }
   };
@@ -207,18 +162,17 @@ export class SRSWebRTCClass {
   // 创建连接
   startConnect = () => {
     if (!this.peerConnection) return;
-    console.warn(`${this.roomId}，开始监听pc的icecandidate`);
+    // 推流
+    console.log(`开始监听pc的icecandidate`);
+
+    // 收到 ICE 候选项
     this.peerConnection.addEventListener('icecandidate', (event) => {
-      prettierInfo(
-        'pc收到icecandidate',
-        { browser: this.browser.browser },
-        'warn'
-      );
+
     });
 
     this.initStreamEvent();
 
-    // iceconnectionstatechange
+    // ICE 连接状态改变
     this.peerConnection.addEventListener(
       'iceconnectionstatechange',
       (event: any) => {
@@ -226,9 +180,7 @@ export class SRSWebRTCClass {
         const iceConnectionState = event.currentTarget.iceConnectionState;
         console.log(
           'pc收到iceconnectionstatechange',
-          // eslint-disable-next-line
-          `iceConnectionState:${iceConnectionState}`,
-          event
+          `iceConnectionState:${iceConnectionState}`
         );
         if (iceConnectionState === 'connected') {
           // ICE 代理至少对每个候选发现了一个可用的连接，此时仍然会继续测试远程候选以便发现更优的连接。同时可能在继续收集候选。
@@ -253,7 +205,7 @@ export class SRSWebRTCClass {
       }
     );
 
-    // connectionstatechange
+    // 连接状态改变
     this.peerConnection.addEventListener(
       'connectionstatechange',
       (event: any) => {
@@ -261,8 +213,7 @@ export class SRSWebRTCClass {
         console.log(
           'pc收到connectionstatechange',
           // eslint-disable-next-line
-          `connectionState:${connectionState}`,
-          event
+          `connectionState:${connectionState}`
         );
         if (connectionState === 'connected') {
           // 表示每一个 ICE 连接要么正在使用（connected 或 completed 状态），要么已被关闭（closed 状态）；并且，至少有一个连接处于 connected 或 completed 状态。
@@ -282,20 +233,6 @@ export class SRSWebRTCClass {
         }
       }
     );
-  };
-
-  // 创建对等连接
-  createPeerConnection = () => {
-    if (!window.RTCPeerConnection) {
-      console.error('当前环境不支持RTCPeerConnection！');
-      alert('当前环境不支持RTCPeerConnection！');
-      return;
-    }
-    if (!this.peerConnection) {
-      this.peerConnection = new RTCPeerConnection();
-      this.startConnect();
-      this.update();
-    }
   };
 
   handleWebRtcError = () => {
@@ -335,9 +272,6 @@ export class SRSWebRTCClass {
           });
           /** 处理视频流卡主 */
           const handleStreamStop = () => {
-            // console.error(
-            //   `上一帧：${this.preFramesDecoded}，当前帧:${currFramesDecoded}，forceINums：${this.forceINums}`
-            // );
             if (this.preFramesDecoded === currFramesDecoded) {
               if (this.forceINums >= this.forceINumsMax) {
                 prettierInfo(
@@ -489,7 +423,7 @@ export class SRSWebRTCClass {
 
   // 手动关闭webrtc连接
   close = () => {
-    console.warn(`${new Date().toLocaleString()}，手动关闭webrtc连接`);
+    console.log(`${new Date().toLocaleString()}，手动关闭webrtc连接`);
     if (this.sender?.sender) {
       this.peerConnection?.removeTrack(this.sender?.sender);
     }

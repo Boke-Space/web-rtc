@@ -15,7 +15,17 @@
                     </div>
                 </div>
                 <div class="video-wrap">
-                    <video id="localVideo" ref="localVideoRef" autoplay muted controls></video>
+                    <vue-danmaku v-model:danmus="chatList" isSuspend v-bind="config">
+                        <video id="localVideo" ref="localVideoRef" autoplay muted controls></video>
+                        <!-- 弹幕slot -->
+                        <template v-slot:dm="{ danmu }">
+                            <div class="danmu-item">
+                                <!-- <img class="img" :src="danmu.avatar" /> -->
+                                <!-- <span>{{ index }}{{ danmu.name }}：</span> -->
+                                <span :style="{ color: `${danmu.color}`}">{{ danmu.msg }}</span>
+                            </div>
+                        </template>
+                    </vue-danmaku>
                 </div>
             </div>
             <div class="right">
@@ -38,21 +48,21 @@
                         </div>
                     </div>
                 </div>
-                <div class="danmu-list">
-                    <div v-for="(item, index) in damuList" :key="index" class="item">
-                        <template v-if="item.msgType === DanmuMsgTypeEnum.danmu">
+                <div class="danmu-list" ref="chatRef">
+                    <div v-for="(item, index) in chatList" :key="index" class="item">
+                        <template v-if="item.msgType === ChatEnum.chat">
                             <span class="name">
                                 {{ item.userInfo?.username || item.socketId }}：
                             </span>
                             <span class="msg">{{ item.msg }}</span>
                         </template>
-                        <template v-else-if="item.msgType === DanmuMsgTypeEnum.otherJoin">
+                        <template v-else-if="item.msgType === ChatEnum.otherJoin">
                             <span class="name system">系统通知：</span>
                             <span class="msg">
                                 {{ item.userInfo?.username || item.socketId }}进入直播！
                             </span>
                         </template>
-                        <template v-else-if="item.msgType === DanmuMsgTypeEnum.userLeaved">
+                        <template v-else-if="item.msgType === ChatEnum.userLeaved">
                             <span class="name system">系统通知：</span>
                             <span class="msg">
                                 {{ item.userInfo?.username || item.socketId }}离开直播！
@@ -61,8 +71,8 @@
                     </div>
                 </div>
                 <div class="send-msg">
-                    <textarea v-model="danmuStr" class="ipt" @keydown="keydownDanmu"></textarea>
-                    <div class="btn" @click="sendDanmu">
+                    <textarea v-model="chat" class="ipt" @keydown="keydownDanmu"></textarea>
+                    <div class="btn" @click="sendMessage">
                         发送
                     </div>
                 </div>
@@ -70,13 +80,14 @@
         </template>
     </div>
 </template>
-  
+
 <script lang="ts" setup>
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { useUserStore } from '@/store/user';
-import { liveTypeEnum, DanmuMsgTypeEnum } from '@/types';
+import { ChatEnum, liveTypeEnum } from '@/types';
+import vueDanmaku from 'vue3-danmaku'
 
 const route = useRoute();
 const userStore = useUserStore();
@@ -84,6 +95,18 @@ const userStore = useUserStore();
 const topRef = ref<HTMLDivElement>();
 const bottomRef = ref<HTMLDivElement>();
 const localVideoRef = ref<HTMLVideoElement>();
+const chatRef = ref<HTMLDivElement | null>(null)
+
+const config = reactive({
+    useSlot: true, // 是否开启slot
+    loop: false, // 是否开启弹幕循环
+    speeds: 200, // 弹幕速度，实际为弹幕滚动完一整屏的秒数，值越小速度越快
+    fontSize: 20, // 文本模式下的字号
+    top: 10, // 弹幕轨道间的垂直间距
+    right: 0, // 同一轨道弹幕的水平间距
+    debounce: 100, // 弹幕刷新频率（多少毫秒插入一条弹幕，建议不小于50）
+    randomChannel: true, // 随机弹幕轨道
+})
 
 const {
     initPull,
@@ -91,21 +114,16 @@ const {
     closeRtc,
     getSocketId,
     keydownDanmu,
-    sendDanmu,
+    sendMessage,
     roomName,
     roomNoLive,
-    damuList,
+    chatList,
     liveUserList,
-    danmuStr,
+    chat,
 } = usePull({
     localVideoRef,
     isFlv: route.query.liveType === liveTypeEnum.srsFlvPull,
     isSRS: route.query.liveType === liveTypeEnum.srsWebrtcPull,
-});
-
-onUnmounted(() => {
-    closeWs();
-    closeRtc();
 });
 
 onMounted(() => {
@@ -118,8 +136,15 @@ onMounted(() => {
     }
     initPull();
 });
+
+onUnmounted(() => {
+    closeWs();
+    closeRtc();
+});
+
+watch(chatList, () => nextTick(() => chatRef.value!.scrollTop = chatRef.value?.scrollHeight!), { deep: true})
 </script>
-  
+
 <style lang="scss" scoped>
 .srs-webrtc-pull-wrap {
     margin: 20px auto 0;

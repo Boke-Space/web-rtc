@@ -9,10 +9,14 @@ export {}
 
 declare module '@vue/runtime-core' {
   export interface GlobalComponents {
+    Barrage: typeof import('./src/components/Barrage.vue')['default']
     Camera: typeof import('./src/components/Camera.vue')['default']
+    Danmu: typeof import('./src/components/Danmu.vue')['default']
     ElButton: typeof import('element-plus/es')['ElButton']
+    ElInpui: typeof import('element-plus/es')['ElInpui']
     ElInput: typeof import('element-plus/es')['ElInput']
     Flv: typeof import('./src/components/Flv.vue')['default']
+    Player: typeof import('./src/components/Player.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     Screen: typeof import('./src/components/Screen.vue')['default']

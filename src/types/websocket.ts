@@ -47,4 +47,5 @@ export enum SocketMessage {
     offer = 'offer',
     answer = 'answer',
     candidate = 'candidate',
+    currentLive = 'currentLive'
 }

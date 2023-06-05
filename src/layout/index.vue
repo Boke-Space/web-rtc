@@ -3,7 +3,7 @@
         <div :class="$style.head">
             <div style="padding: 10px;">
                 <el-button type="primary" round @click="navigateHome">Home</el-button>
-                <el-button type="primary" round @click="navigateRTC">WebRTC</el-button>
+                <!-- <el-button type="primary" round @click="navigateRTC">WebRTC</el-button> -->
                 <el-button type="primary" round @click="navigateSRS">SRS</el-button>
             </div>
         </div>
