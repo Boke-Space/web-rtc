@@ -156,10 +156,11 @@ export function usePull({
             roomName.value = data.data.roomName;
             streamurl.value = data.data.streamUrl;
             flvurl.value = data.data.flvUrl;
-            // if (isFlv) {
-            //     const { pause } = useFlvPlay(flvurl.value, localVideoRef.value!)
-            //     pause()
-            // }
+            if (isFlv) {
+                const { play } = useFlvPlay(flvurl.value, localVideoRef.value!)
+                play()
+                isLive.value = true
+            }
             instance.send({ msgType: SocketMessage.getLiveUser });
         });
 

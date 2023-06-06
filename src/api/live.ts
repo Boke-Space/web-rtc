@@ -1,15 +1,8 @@
 import type { Data } from '@/service/type';
 
-export const fetchLiveListApi = () => service.get<Data>({
-    url: '/live/list',
-    params: {
-        orderName: 'created_at',
-        orderBy: 'desc'
-    }
-})
+export const fetchLiveListApi = () => service.get<Data>({ url: '/live/list' })
 
-export const deleteLiveListApi = (params = {}) => service.delete<Data>({
-    url: '/live',
-    params
-})
+export const fetchLiveByIdApi = (roomId: string) => service.get<Data>({ url: `/live/${roomId}` })
+
+export const deleteLiveListApi = (params = {}) => service.delete<Data>({ url: '/live', params })
 

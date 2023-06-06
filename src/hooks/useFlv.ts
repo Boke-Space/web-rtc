@@ -2,7 +2,7 @@ import flvJs from 'flv.js'
 
 let flvPlayer: any
 
-export function useFlvPlay(flvUrl: string, videoEl: HTMLVideoElement, isDelete = true) {
+export function useFlvPlay(flvUrl: string, videoEl: HTMLVideoElement) {
 
     if (flvPlayer) {
         flvPlayer.detachMediaElement()
