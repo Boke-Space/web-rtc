@@ -35,10 +35,10 @@
                         </span> -->
                     </div>
                     <div class="bottom">
-                        <!-- <el-button class="item" type="primary" @click="startLive" :disabled="startDisabled">
+                        <el-button class="item" type="primary" @click="startLive" :disabled="startDisabled">
                             共享屏幕
                         </el-button>
-                        <el-button class="item" type="primary" @click="endLive" :disabled="endDisabled">
+                        <!-- <el-button class="item" type="primary" @click="endLive" :disabled="endDisabled">
                             结束共享
                         </el-button> -->
                     </div>
@@ -73,12 +73,6 @@ const roomName = ref('')
 const topRef = ref<HTMLDivElement>();
 const bottomRef = ref<HTMLDivElement>();
 const localVideoRef = ref<HTMLVideoElement>();
-const liveType = route.query.liveType;
-const chatRef = ref<HTMLDivElement | null>(null)
-const localStream = ref()
-
-// 是否会议创建人
-const isCreate = ref(false)
 
 const {
     otherList,
@@ -90,8 +84,10 @@ const {
     setDomVideoStream,
     removeChildVideoDom,
     getPushSdp,
-    getPullSdp
-} = useConference(roomId, true)
+    getPullSdp,
+    startGetDisplayMedia,
+    startLive
+} = useConference(true, roomId, localVideoRef)
 
 onMounted(() => {
     webSocketInit()
@@ -102,19 +98,6 @@ onMounted(() => {
         localVideoRef.value.style.height = `${res}px`;
     }
 });
-
-async function startGetDisplayMedia() {
-    const res = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true,
-    });
-    localStream.value = res
-    setDomVideoStream("localVideo", res);
-    const { data } = await fetchLiveByIdApi(roomId)
-    if (data == null) isCreate.value = true
-    webSocketInit()
-    await getPushSdp(localStream.value);
-}
 
 </script>
 
