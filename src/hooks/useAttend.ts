@@ -3,7 +3,7 @@ import { SocketMessage, SocketStatus } from "@/types/websocket";
 import { SRSWebRTCClass } from "@/utils/srsWebRtc";
 import { WebSocketClass } from "@/utils/webSocket";
 
-export function useConference(isAdmin = true, roomId: string, localVideoRef?: Ref<HTMLVideoElement | undefined>) {
+export function useAttend(isAdmin = true, roomId: string, localVideoRef?: Ref<HTMLVideoElement | undefined>) {
 
     const networkStore = useNetworkStore();
     const liveUserList = ref<ILiveUser[]>([]);
@@ -113,8 +113,9 @@ export function useConference(isAdmin = true, roomId: string, localVideoRef?: Re
         });
 
         // 其他用户加入房间
-        instance.socketIo.on(SocketMessage.otherJoin, (data) => {
+        instance.socketIo.on(SocketMessage.otherJoin, async (data) => {
             console.log('【websocket】其他用户加入房间', data);
+            await getPullSdp(data.socketId)
             const content: Chat = {
                 msgType: ChatEnum.otherJoin,
                 socketId: data.socketId,
@@ -245,6 +246,7 @@ export function useConference(isAdmin = true, roomId: string, localVideoRef?: Re
 
     function setDomVideoTrick(domId: string, trick: any) {
         let video = document.getElementById(domId)
+        console.log('video', video)
         let stream = video.srcObject
         if (stream) {
             stream.addTrack(trick)

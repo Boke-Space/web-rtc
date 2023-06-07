@@ -62,6 +62,7 @@ declare global {
   const toValue: typeof import('vue')['toValue']
   const triggerRef: typeof import('vue')['triggerRef']
   const unref: typeof import('vue')['unref']
+  const useAttend: typeof import('./src/hooks/useAttend')['useAttend']
   const useAttrs: typeof import('vue')['useAttrs']
   const useConference: typeof import('./src/hooks/useConference')['useConference']
   const useCssModule: typeof import('vue')['useCssModule']
