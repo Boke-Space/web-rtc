@@ -153,9 +153,9 @@ export function usePull({
         // 用户加入房间
         instance.socketIo.on(SocketMessage.joined, (data) => {
             console.log('【websocket】用户加入房间完成', data);
-            roomName.value = data.data.roomName;
-            streamurl.value = data.data.streamUrl;
-            flvurl.value = data.data.flvUrl;
+            roomName.value = data.roomName;
+            streamurl.value = data.streamUrl;
+            flvurl.value = data.flvUrl;
             if (isFlv) {
                 const { play } = useFlvPlay(flvurl.value, localVideoRef.value!)
                 play()

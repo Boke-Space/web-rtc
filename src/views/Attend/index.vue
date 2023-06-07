@@ -236,7 +236,7 @@ async function init() {
     instance.socketIo.on(SocketMessage.roomLiveing, async (data: any) => {
         console.log('【websocket】收到管理员正在直播', data);
         initMeetingRoom()
-        roomUserList.value = data.liveUser;
+        roomUserList.value = data;
     });
 
     // 其他用户加入房间
