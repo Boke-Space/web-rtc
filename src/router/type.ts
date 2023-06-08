@@ -3,7 +3,8 @@ export enum routerPath {
     Push = '/push',
     Pull = '/pull/:roomId',
     Attend = '/attend',
-    Conference = '/conference/:roomId',
+    Conference = '/conference',
+    Test = '/test',
 }
 
 export enum routerName {
@@ -12,6 +13,7 @@ export enum routerName {
     Pull = 'Pull',
     Attend = 'Attend',
     Conference = 'Conference',
+    Test = 'Test',
 }
 
 

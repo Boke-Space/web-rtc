@@ -49,3 +49,5 @@ export enum SocketMessage {
     candidate = 'candidate',
     currentLive = 'currentLive'
 }
+
+export type WebsocketType = 'live' | 'watch' | 'meeting' | 'attend'

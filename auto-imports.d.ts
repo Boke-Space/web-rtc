@@ -76,6 +76,7 @@ declare global {
   const useRouter: typeof import('vue-router')['useRouter']
   const useSlots: typeof import('vue')['useSlots']
   const useUserStore: typeof import('./src/store/user')['useUserStore']
+  const useWebRTC: typeof import('./src/hooks/useWebRTC')['useWebRTC']
   const useWebSocket: typeof import('./src/hooks/useWebSocket')['useWebSocket']
   const watch: typeof import('vue')['watch']
   const watchEffect: typeof import('vue')['watchEffect']

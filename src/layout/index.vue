@@ -2,10 +2,11 @@
     <div :class="$style.layout">
         <div :class="$style.head">
             <div style="padding: 10px;display:flex;justify-content: center;">
-                <el-button type="primary" round @click="navigateHome">Home</el-button>
+                <el-button type="success" round @click="navigateHome">Home</el-button>
                 <!-- <el-button type="primary" round @click="navigateRTC">WebRTC</el-button> -->
                 <el-button type="primary" round @click="navigateLive">直播</el-button>
-                <el-button type="warning" round @click="navigateAttend">会议</el-button>
+                <el-button type="warning" round @click="navigateConference">发起会议</el-button>
+                <el-button type="warning" round @click="navigateAttend">参与会议</el-button>
                 <el-button type="danger" round>远程控制</el-button>
             </div>
         </div>
@@ -35,8 +36,16 @@ function navigateLive() {
     });
 }
 
+function navigateConference() {
+    router.push('/conference')
+}
+
 function navigateAttend() {
     router.push('/attend')
+}
+
+function navigateTest() {
+    router.push('/test')
 }
 </script>
 

@@ -83,7 +83,7 @@ export function usePull({
         const ws = new WebSocketClass({
             roomId,
             url: 'ws://192.168.192.131:3000',
-            isAdmin: false,
+            type: 'watch',
         });
         ws.update();
         initReveive()

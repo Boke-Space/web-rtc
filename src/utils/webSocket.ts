@@ -1,7 +1,7 @@
 import { Socket, io } from 'socket.io-client';
 
 import { useNetworkStore } from '@/store/network';
-import { SocketStatus, SocketMessage } from '@/types/websocket';
+import { SocketStatus, SocketMessage, type WebsocketType } from '@/types/websocket';
 
 // websocket连接状态
 export enum WsConnectStatusEnum {
@@ -59,15 +59,15 @@ export class WebSocketClass {
   status: SocketStatus = SocketStatus.disconnect;
   url = '';
   roomId = '-1';
-  isAdmin = false;
+  type: WebsocketType = 'live';
 
-  constructor({ roomId = '', url, isAdmin }: {roomId?: string, url: string, isAdmin: boolean }) {
+  constructor({ roomId = '', url, type }: {roomId?: string, url: string, type: WebsocketType }) {
     if (!window.WebSocket) {
       alert('当前环境不支持WebSocket！');
       return;
     }
     this.roomId = roomId;
-    this.isAdmin = isAdmin;
+    this.type = type;
 
     this.url = url;
     this.socketIo = io(url, { transports: ['websocket'], forceBase64: false });
@@ -80,7 +80,7 @@ export class WebSocketClass {
       roomId: this.roomId,
       socketId: this.socketIo.id,
       data,
-      isAdmin: this.isAdmin,
+      type: this.type,
     });
   };
 

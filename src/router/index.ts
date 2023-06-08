@@ -37,6 +37,11 @@ const routes: Array<RouteRecordRaw> = [
                 name: routerName.Conference,
                 component: () => import(`@/views/${routerName.Conference}/index.vue`)
             },
+            {
+                path: routerPath.Test,
+                name: routerName.Test,
+                component: () => import(`@/views/${routerName.Test}/index.vue`)
+            },
         ]
     }
 ]

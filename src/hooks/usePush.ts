@@ -148,7 +148,7 @@ export function usePush({
         const ws = new WebSocketClass({
             roomId: roomId,
             url: 'ws://192.168.192.131:3000',
-            isAdmin: true,
+            type: 'live',
         });
         ws.update();
     }
@@ -494,6 +494,7 @@ export function usePush({
     }
 
     async function closeRtc() {
+        await deleteLiveListApi({ roomId })
         networkStore.rtcMap.forEach((rtc) => {
             rtc.close();
         });

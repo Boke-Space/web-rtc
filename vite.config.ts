@@ -47,7 +47,7 @@ export default defineConfig({
     host: "0.0.0.0",
     proxy: {
       '/srs/': {
-        target: 'http://localhost:1985',
+        target: 'http://192.168.192.131:1985',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/srs\//, ''),
       },

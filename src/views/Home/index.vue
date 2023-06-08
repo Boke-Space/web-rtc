@@ -91,7 +91,7 @@ function joinFlvRoom() {
 const websocket = new WebSocketClass({
   roomId: 'home',
   url: 'http://192.168.192.131:3000',
-  isAdmin: false,
+  type: 'flv',
 });
 websocket.update();
 
