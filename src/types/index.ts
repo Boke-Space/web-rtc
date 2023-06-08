@@ -129,7 +129,7 @@ export interface ILiveUser {
 
 export interface Chat {
     msgType: ChatEnum;
-    msg: string;
+    msg?: string;
     socketId: string;
     userInfo?: IUser;
     color?: string

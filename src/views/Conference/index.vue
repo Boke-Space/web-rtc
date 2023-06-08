@@ -126,7 +126,7 @@ function webSocketInit() {
     // 用户加入房间
     instance.socketIo.on(SocketMessage.joined, async (data) => {
         console.log('【websocket】用户加入房间完成', data);
-        if (data.liveUser) {
+        if (data) {
             roomUserList.value = data.liveUser;
         }
     });
@@ -150,11 +150,11 @@ function webSocketInit() {
         instance.socketIo?.emit(SocketMessage.leave, {
             roomId: instance.roomId,
         });
-        removeChildVideoDom(data.socketId)
         roomUserList.value = roomUserList.value.filter(
-            (item) => item.socketId !== data.socketId
+            (item) => item.id !== data.socketId
         );
         others.value = roomUserList.value.filter(item => item.id !== id.value)
+        removeChildVideoDom(data.socketId)
     });
 
     // 用户离开房间完成
@@ -164,6 +164,12 @@ function webSocketInit() {
         // roomUserList.value = roomUserList.value.filter(
         //     (item) => item.socketId !== data.socketId
         // );
+    });
+
+    instance.socketIo.on(SocketStatus.disconnect, async () => {
+        console.log('【websocket】websocket连接断开');
+        instance.status = SocketStatus.disconnect;
+        instance.update();
     });
 }
 
@@ -244,6 +250,7 @@ async function getPullSdp(streamId: string) {
 
 function setDomVideoTrick(domId: string, trick: any) {
     let video = document.getElementById(domId) as any
+    console.log(video)
     let stream = video?.srcObject
     if (stream) {
         stream.addTrack(trick)
@@ -277,10 +284,21 @@ async function setDomVideoStream(domId: any, newStream: any) {
 
 function removeChildVideoDom(domId: string) {
     let video = document.getElementById(domId) as any
-    console.log(video)
     if (video) {
         video.remove()
     }
+}
+
+async function closeWs() {
+    const instance = networkStore.wsMap.get(roomId);
+    instance?.close();
+}
+
+async function closeRtc() {
+    await deleteLiveListApi({ roomId })
+    networkStore.rtcMap.forEach((rtc) => {
+        rtc.close();
+    });
 }
 
 onMounted(async () => {
@@ -289,7 +307,6 @@ onMounted(async () => {
         roomId = route.query.roomId as string
         type = 'attend'
         await startCamera()
-        console.log(localStream.value)
         setDomVideoStream("localVideo", localStream.value);
         await getPushSdp(id.value, localStream.value)
     }
@@ -302,6 +319,10 @@ onMounted(async () => {
     }
 });
 
+onUnmounted(() => {
+    closeWs();
+    closeRtc();
+});
 </script>
 
 <style lang="scss" scoped>

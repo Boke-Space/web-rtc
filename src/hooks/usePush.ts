@@ -313,7 +313,6 @@ export function usePush({
             const content: Chat = {
                 msgType: ChatEnum.userLeaved,
                 socketId: data.socketId,
-                msg: data.data.msg,
             };
             chatList.value.push(content);
         });
