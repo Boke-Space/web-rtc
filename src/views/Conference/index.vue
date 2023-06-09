@@ -2,7 +2,7 @@
     <div class="webrtc-push-wrap">
         <div ref="topRef" class="left">
             <div class="video-wrap">
-                <video id="localVideo" ref="localVideoRef" autoplay muted controls></video>
+                <video :id="id" ref="localVideoRef" autoplay muted controls></video>
             </div>
             <div ref="bottomRef" class="control">
                 <div class="info">
@@ -42,13 +42,13 @@
         </div>
         <div class="right">
             <div class="list">
-                <div class="item" v-for="item of others" :key="item.socketId" :id="item.id">
+                <div class="item" v-for="item of others" :key="item.socketId" :id="item.id + 'video'">
                     <div class="triangle"></div>
                     <label
                         style="position: absolute;left: 5px;bottom: 5px;color: antiquewhite;font-size: 18px;z-index: 999;">
                         {{ item.id }}
                     </label>
-                    <video :id="item.id + 'video'" style="object-fit: fill;height: 100%;width: 100%;" controls></video>
+                    <video :id="item.id" style="object-fit: fill;height: 100%;width: 100%;" @click=swap(item.id)></video>
                 </div>
             </div>
         </div>
@@ -69,7 +69,9 @@ const route = useRoute()
 
 const topRef = ref<HTMLDivElement>();
 const bottomRef = ref<HTMLDivElement>();
-const localVideoRef = ref<HTMLVideoElement>();
+const localVideoRef = ref<HTMLVideoElement | null>(null);
+
+const streamList = ref<any[]>([]);
 
 const {
     isSharedScreen,
@@ -78,7 +80,7 @@ const {
     sharedScreen,
     endShared,
     startCamera
-} = useWebRTC()
+} = useWebRTC({ localVideoRef })
 
 const networkStore = useNetworkStore();
 
@@ -101,7 +103,7 @@ function webSocketInit() {
 
     if (!instance?.socketIo) return;
     // websocket连接成功
-    instance.socketIo.on(SocketStatus.connect, () => {
+    instance.socketIo.on(SocketStatus.connect, async () => {
         console.log('【websocket】websocket连接成功');
         instance.status = SocketStatus.connect;
         instance.update();
@@ -126,6 +128,7 @@ function webSocketInit() {
     // 用户加入房间
     instance.socketIo.on(SocketMessage.joined, async (data) => {
         console.log('【websocket】用户加入房间完成', data);
+        await setDomVideoStream(id.value, localStream.value);
         if (data) {
             roomUserList.value = data.liveUser;
         }
@@ -154,7 +157,7 @@ function webSocketInit() {
             (item) => item.id !== data.socketId
         );
         others.value = roomUserList.value.filter(item => item.id !== id.value)
-        removeChildVideoDom(data.socketId)
+        removeChildVideoDom(data.socketId + 'video')
     });
 
     // 用户离开房间完成
@@ -173,7 +176,7 @@ function webSocketInit() {
     });
 }
 
-function start() {
+async function start() {
     const instance = networkStore.wsMap.get(roomId)!
     instance.send({
         msgType: SocketMessage.join,
@@ -182,12 +185,13 @@ function start() {
             type
         },
     })
-    initMeetingRoom()
+    await initMeetingRoom()
+    // setDomVideoStream(id.value, localStream.value);
 }
 
 async function initMeetingRoom() {
     //推流
-    localVideoRef.value!.srcObject = localStream.value
+    // localVideoRef.value!.srcObject = localStream.value
     await getPushSdp(id.value, localStream.value);
     //判断房间内是否有其他人
     others.value = roomUserList.value.filter(item => item.id !== id.value)
@@ -229,12 +233,13 @@ async function getPullSdp(streamId: string) {
     } else {
         RTCPullPeerMap.value.set(streamId, pc)
     }
+    console.log(streamId)
     pc = new PeerConnection();
     pc.addTransceiver("audio", { direction: "recvonly" });
     pc.addTransceiver("video", { direction: "recvonly" });
     pc.ontrack = function (e) {
         //这里DOM ID 就是用户UserID 和 streamID一致  
-        setDomVideoTrick(streamId + 'video', e.track)
+        setDomVideoTrick(streamId, e.track)
     }
     let offer = await pc.createOffer();
     await pc.setLocalDescription(offer)
@@ -250,15 +255,18 @@ async function getPullSdp(streamId: string) {
 
 function setDomVideoTrick(domId: string, trick: any) {
     let video = document.getElementById(domId) as any
-    console.log(video)
     let stream = video?.srcObject
     if (stream) {
         stream.addTrack(trick)
     } else {
         stream = new MediaStream()
         stream.addTrack(trick)
+        const obj = { 
+            id: domId,
+            stream,
+        }
+        streamList.value.push(obj)
         video.srcObject = stream
-        video.controls = true;
         video.autoplay = true;
         video.style.width = "100%"
         video.style.height = "100%"
@@ -277,6 +285,11 @@ async function setDomVideoStream(domId: any, newStream: any) {
             stream.removeTrack(e)
         })
     }
+    const obj = { 
+        id: domId,
+        stream: newStream
+    }
+    streamList.value.push(obj)
     video.srcObject = newStream
     video.muted = true
     video.autoplay = true
@@ -303,12 +316,10 @@ async function closeRtc() {
 
 onMounted(async () => {
     await getMediaDevices()
+    await startCamera()
     if (route.query.roomId) {
         roomId = route.query.roomId as string
         type = 'attend'
-        await startCamera()
-        setDomVideoStream("localVideo", localStream.value);
-        await getPushSdp(id.value, localStream.value)
     }
     webSocketInit()
     if (topRef.value && bottomRef.value && localVideoRef.value) {
@@ -318,6 +329,28 @@ onMounted(async () => {
         localVideoRef.value.style.height = `${res}px`;
     }
 });
+
+function swap(domId: string) {
+    let videoId = domId
+    console.log(streamList.value)
+    console.log(localVideoRef.value)
+    const video = document.getElementById(videoId) as HTMLVideoElement
+    const stream = streamList.value.find((item) => item.id === videoId)
+    let oldStream = localVideoRef.value?.srcObject
+    const localId = localVideoRef.value?.id!
+    console.log('local', localVideoRef.value?.id)
+    console.log('remote', video.id)
+    id.value = video.id
+    others.value.map((item) => {
+        if (item.id === domId) {
+            item.id = localId
+        }
+    })
+    console.log('domId', domId)
+    console.log('stream', stream)
+    localVideoRef.value!.srcObject = stream.stream
+    video!.srcObject = oldStream!
+}
 
 onUnmounted(() => {
     closeWs();

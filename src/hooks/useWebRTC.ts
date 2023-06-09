@@ -1,6 +1,10 @@
 import type { Ref } from 'vue';
 
-export function useWebRTC() {
+export function useWebRTC({
+    localVideoRef
+}: {
+    localVideoRef: Ref<HTMLVideoElement | null>
+}) {
 
     const audioInputs = ref<MediaDeviceInfo[]>([])
     const audioOutputs = ref<MediaDeviceInfo[]>([])
@@ -33,6 +37,8 @@ export function useWebRTC() {
             const res = await navigator.mediaDevices.getDisplayMedia(container)
             localStream.value = res
             isSharedScreen.value = true
+            // localVideoRef.value!.srcObject = res
+            return res
         } catch (err) {
             console.error('媒体设备获取失败: ', err);
             return [];
@@ -42,6 +48,7 @@ export function useWebRTC() {
     async function endShared() {
         localStream.value = null
         isSharedScreen.value = false
+        // localVideoRef.value!.srcObject = null
     }
 
     // 开启摄像头
