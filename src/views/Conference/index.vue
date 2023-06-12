@@ -1,8 +1,12 @@
 <template>
     <div class="webrtc-push-wrap">
         <div ref="topRef" class="left">
-            <div class="video-wrap">
+            <div class="video-wrap" :id="id + 'video'">
                 <video :id="id" ref="localVideoRef" autoplay muted controls></video>
+                <label
+                        style="position: absolute;left: 5px;bottom: 5px;color: antiquewhite;font-size: 18px;z-index: 999;">
+                        {{ id }}
+                    </label>            
             </div>
             <div ref="bottomRef" class="control">
                 <div class="info">
@@ -27,10 +31,10 @@
                         </span>
                     </div>
                     <div class="bottom">
-                        <el-button v-if="!isSharedScreen" class="item" type="primary" @click="sharedScreen">
+                        <!-- <el-button v-if="!isSharedScreen" class="item" type="primary" @click="sharedScreen">
                             共享屏幕
-                        </el-button>
-                        <el-button v-else class="item" type="primary" @click="endShared">
+                        </el-button> -->
+                        <el-button v-if="isSharedScreen"  class="item" type="primary" @click="endShared">
                             结束共享
                         </el-button>
                         <el-button class="item" type="primary" @click="start">
@@ -61,6 +65,7 @@ import { SocketMessage, SocketStatus, type WebsocketType } from '@/types/websock
 import { SRSWebRTCClass } from '@/utils/srsWebRtc';
 import { WebSocketClass } from '@/utils/webSocket';
 import { getRandomString } from 'billd-utils';
+import { uniqueObjectList } from '../../utils/Array';
 
 let roomId = getRandomString(15)
 let type: WebsocketType = 'meeting'
@@ -91,6 +96,7 @@ const srsServerRTCURL = 'webrtc://192.168.192.131/live/';
 const id = ref('')
 const roomUserList = ref<any[]>([])
 const others = ref<any[]>([])
+const currentUser = ref()
 
 function webSocketInit() {
     const ws = new WebSocketClass({
@@ -104,10 +110,11 @@ function webSocketInit() {
     if (!instance?.socketIo) return;
     // websocket连接成功
     instance.socketIo.on(SocketStatus.connect, async () => {
-        console.log('【websocket】websocket连接成功');
+        console.log('【websocket】websocket连接成功, socketIo', instance.socketIo?.id!);
         instance.status = SocketStatus.connect;
         instance.update();
         id.value = instance.socketIo?.id!
+        // if (localStorage.getItem('socketId') === null) localStorage.setItem('socketId', id.value)
         if (type === 'attend') {
             instance.send({
                 msgType: SocketMessage.join,
@@ -122,7 +129,8 @@ function webSocketInit() {
     instance.socketIo.on(SocketMessage.liveUser, async (data) => {
         console.log('【websocket】当前所有在线用户', data);
         roomUserList.value = data;
-        others.value = roomUserList.value.filter(item => item.id !== id.value)
+        others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
+        console.log('others', others.value)
     });
 
     // 用户加入房间
@@ -156,17 +164,15 @@ function webSocketInit() {
         roomUserList.value = roomUserList.value.filter(
             (item) => item.id !== data.socketId
         );
-        others.value = roomUserList.value.filter(item => item.id !== id.value)
-        removeChildVideoDom(data.socketId + 'video')
+        others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
+        console.log('others', others.value)
+        currentUser.value = data.socketId
     });
 
     // 用户离开房间完成
     instance.socketIo.on(SocketMessage.leaved, (data) => {
         console.log('【websocket】用户离开房间完成', data);
-        // 用户离开房间刷新人数
-        // roomUserList.value = roomUserList.value.filter(
-        //     (item) => item.socketId !== data.socketId
-        // );
+        removeChildVideoDom(currentUser.value + 'video', data.socketId)
     });
 
     instance.socketIo.on(SocketStatus.disconnect, async () => {
@@ -177,6 +183,7 @@ function webSocketInit() {
 }
 
 async function start() {
+    await sharedScreen()
     const instance = networkStore.wsMap.get(roomId)!
     instance.send({
         msgType: SocketMessage.join,
@@ -194,7 +201,8 @@ async function initMeetingRoom() {
     // localVideoRef.value!.srcObject = localStream.value
     await getPushSdp(id.value, localStream.value);
     //判断房间内是否有其他人
-    others.value = roomUserList.value.filter(item => item.id !== id.value)
+    others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
+    console.log('others', others.value)
     for (let i = 0; i < others.value.length; i++) {
         let user = others.value[i];
         //拉其他用户媒体流
@@ -233,7 +241,6 @@ async function getPullSdp(streamId: string) {
     } else {
         RTCPullPeerMap.value.set(streamId, pc)
     }
-    console.log(streamId)
     pc = new PeerConnection();
     pc.addTransceiver("audio", { direction: "recvonly" });
     pc.addTransceiver("video", { direction: "recvonly" });
@@ -295,9 +302,18 @@ async function setDomVideoStream(domId: any, newStream: any) {
     video.autoplay = true
 }
 
-function removeChildVideoDom(domId: string) {
-    let video = document.getElementById(domId) as any
-    if (video) {
+function removeChildVideoDom(domId: string, socketId?: string) {
+    let video = document.getElementById(domId) as HTMLVideoElement
+    if (video?.id.replace('video', '') === id.value) {
+        const index = others.value.findIndex((item) => item.id === socketId)
+        const videoId = others.value[index].id
+        const stream = streamList.value.find((item) => item.id === videoId)
+        localVideoRef.value!.srcObject = stream.stream
+        others.value.splice(index, 1)
+        // id复原
+        id.value = socketId!
+        console.log('remove', others.value)
+    } else {
         video.remove()
     }
 }
@@ -332,22 +348,17 @@ onMounted(async () => {
 
 function swap(domId: string) {
     let videoId = domId
-    console.log(streamList.value)
-    console.log(localVideoRef.value)
     const video = document.getElementById(videoId) as HTMLVideoElement
     const stream = streamList.value.find((item) => item.id === videoId)
     let oldStream = localVideoRef.value?.srcObject
     const localId = localVideoRef.value?.id!
-    console.log('local', localVideoRef.value?.id)
-    console.log('remote', video.id)
     id.value = video.id
     others.value.map((item) => {
         if (item.id === domId) {
             item.id = localId
         }
     })
-    console.log('domId', domId)
-    console.log('stream', stream)
+    console.log('swap', others.value)
     localVideoRef.value!.srcObject = stream.stream
     video!.srcObject = oldStream!
 }
@@ -356,6 +367,8 @@ onUnmounted(() => {
     closeWs();
     closeRtc();
 });
+
+
 </script>
 
 <style lang="scss" scoped>
