@@ -1,12 +1,23 @@
 <template>
     <div class="webrtc-push-wrap">
+        <!-- <div class="right">
+            <div class="list">
+                <div class="item" v-for="item of roomUserList" :key="item.socketId" :id="item.id + 'video'">
+                    <div class="triangle"></div>
+                    <label
+                        style="position: absolute;left: 5px;bottom: 5px;color: antiquewhite;font-size: 18px;z-index: 999;">
+                        {{ item.id }}
+                    </label>
+                    <video :id="item.id" style="object-fit: fill;height: 100%;width: 100%;" @click=swap(item.id)></video>
+                </div>
+            </div>
+        </div> -->
         <div ref="topRef" class="left">
             <div class="video-wrap" :id="id + 'video'">
                 <video :id="id" ref="localVideoRef" autoplay muted controls></video>
-                <label
-                        style="position: absolute;left: 5px;bottom: 5px;color: antiquewhite;font-size: 18px;z-index: 999;">
-                        {{ id }}
-                    </label>            
+                <label style="position: absolute;left: 5px;bottom: 5px;color: antiquewhite;font-size: 18px;z-index: 999;">
+                    {{ id }}
+                </label>
             </div>
             <div ref="bottomRef" class="control">
                 <div class="info">
@@ -31,14 +42,14 @@
                         </span>
                     </div>
                     <div class="bottom">
-                        <!-- <el-button v-if="!isSharedScreen" class="item" type="primary" @click="sharedScreen">
-                            共享屏幕
-                        </el-button> -->
-                        <el-button v-if="isSharedScreen"  class="item" type="primary" @click="endShared">
-                            结束共享
+                        <el-button v-if="!isharedScreen" class="item" type="primary" @click="displayScreen">
+                            <span>共享屏幕</span>
                         </el-button>
-                        <el-button class="item" type="primary" @click="start">
-                            开始会议
+                        <el-button v-if="!isSharedScreen" class="item" type="primary" @click="displayCamera">
+                            <span>开启摄像头</span>
+                        </el-button>
+                        <el-button v-else class="item" type="primary" @click="end">
+                            <span>结束共享</span>
                         </el-button>
                     </div>
                 </div>
@@ -46,14 +57,17 @@
         </div>
         <div class="right">
             <div class="list">
-                <div class="item" v-for="item of others" :key="item.socketId" :id="item.id + 'video'">
-                    <div class="triangle"></div>
-                    <label
-                        style="position: absolute;left: 5px;bottom: 5px;color: antiquewhite;font-size: 18px;z-index: 999;">
-                        {{ item.id }}
-                    </label>
-                    <video :id="item.id" style="object-fit: fill;height: 100%;width: 100%;" @click=swap(item.id)></video>
-                </div>
+                <template v-for="item of others" :key="item.socketId">
+                    <div v-if="item.isOpen === true" class="item" :id="item.id + 'video'">
+                        <div class="triangle"></div>
+                        <label
+                            style="position: absolute;left: 5px;bottom: 5px;color: antiquewhite;font-size: 18px;z-index: 999;">
+                            {{ item.id }}
+                        </label>
+                        <video :id="item.id" style="object-fit: fill;height: 100%;width: 100%;"
+                            @click=swap(item.id)></video>
+                    </div>
+                </template>
             </div>
         </div>
     </div>
@@ -71,6 +85,7 @@ let roomId = getRandomString(15)
 let type: WebsocketType = 'meeting'
 const roomName = ref('')
 const route = useRoute()
+const isJoin = ref(false)
 
 const topRef = ref<HTMLDivElement>();
 const bottomRef = ref<HTMLDivElement>();
@@ -114,45 +129,80 @@ function webSocketInit() {
         instance.status = SocketStatus.connect;
         instance.update();
         id.value = instance.socketIo?.id!
-        // if (localStorage.getItem('socketId') === null) localStorage.setItem('socketId', id.value)
-        if (type === 'attend') {
-            instance.send({
-                msgType: SocketMessage.join,
-                data: {
-                    type
-                }
-            });
-        }
+        instance.send({
+            msgType: SocketMessage.join,
+            data: {
+                type
+            }
+        });
     })
 
-    // 当前所有在线用户
-    instance.socketIo.on(SocketMessage.liveUser, async (data) => {
-        console.log('【websocket】当前所有在线用户', data);
-        roomUserList.value = data;
+    // 收到其他用户发起共享屏幕
+    instance.socketIo.on(SocketMessage.getSharedScreen, async (data) => {
+        console.log('【websocket】监听到用户分享屏幕', data);
+        roomUserList.value = data.liveUser;
         others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
-        console.log('others', others.value)
+        await initMeetingRoom()
+    });
+
+    // 收到其他用户发起共享屏幕
+    instance.socketIo.on(SocketMessage.getPauseScreen, async (data) => {
+        console.log('【websocket】监听到用户结束屏幕', data);
+        roomUserList.value = data.liveUser;
+        others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
+        let video = document.getElementById(data.socketId) as HTMLVideoElement
+        video.srcObject = null
     });
 
     // 用户加入房间
     instance.socketIo.on(SocketMessage.joined, async (data) => {
         console.log('【websocket】用户加入房间完成', data);
-        await setDomVideoStream(id.value, localStream.value);
         if (data) {
             roomUserList.value = data.liveUser;
+            others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
         }
-    });
-
-    // 当前所有在线用户
-    instance.socketIo.on(SocketMessage.roomLiveing, async (data: any) => {
-        console.log('【websocket】收到管理员正在直播', data);
-        initMeetingRoom()
-        roomUserList.value = data;
+        // 拉流
+        await initMeetingRoom()
+        // 若没开启屏幕分享将他人屏幕分享
+        // if (localVideoRef.value?.srcObject === null && others.value.length > 0) {
+        //     const first = others.value[0].id
+        //     const stream = streamList.value.find((item) => item.id === first)
+        //     localVideoRef.value.srcObject = stream.stream
+        //     // others.value.splice(0, 1)
+        //     others.value[0].isOpen = false
+        // }
     });
 
     // 其他用户加入房间
     instance.socketIo.on(SocketMessage.otherJoin, async (data) => {
         console.log('【websocket】其他用户加入房间', data);
+        roomUserList.value = data.liveUser;
+        others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
         await getPullSdp(data.username)
+        let video = document.getElementById(data.username) as HTMLVideoElement
+        // 其他用户没开启屏幕分享
+        // if (video?.srcObject === null && others.value.length > 0) {
+        //     others.value[0].isOpen = false
+        // }
+        // if (others.value.length > 0) {
+        //     const user = others.value.find((item) => item.id === data.username)
+        //     user.isOpen = true
+        // }
+    });
+
+    // 当前所有在线用户
+    instance.socketIo.on(SocketMessage.roomLiveing, async (data: any) => {
+        console.log('【websocket】收到管理员正在直播', data);
+        roomUserList.value = data;
+        others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
+        // await initMeetingRoom()
+        // 进入会议者没有开启共享屏幕
+        // if (localVideoRef.value?.srcObject === null && others.value.length > 0) {
+        //     const first = others.value[0].id
+        //     const stream = streamList.value.find((item) => item.id === first)
+        //     localVideoRef.value.srcObject = stream.stream
+        //     others.value.splice(0, 1)
+        // }
     });
 
     // 用户离开房间
@@ -165,7 +215,6 @@ function webSocketInit() {
             (item) => item.id !== data.socketId
         );
         others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
-        console.log('others', others.value)
         currentUser.value = data.socketId
     });
 
@@ -182,30 +231,70 @@ function webSocketInit() {
     });
 }
 
-async function start() {
+async function displayScreen() {
     await sharedScreen()
     const instance = networkStore.wsMap.get(roomId)!
+    // 发起共享屏幕
     instance.send({
-        msgType: SocketMessage.join,
+        msgType: SocketMessage.sharedScreen,
         data: {
             roomName: roomName.value,
             type
         },
     })
-    await initMeetingRoom()
-    // setDomVideoStream(id.value, localStream.value);
+    // 展示屏幕并将流添加到数组中
+    setDomVideoStream(id.value, localStream.value)
+    getPushSdp(id.value, localStream.value);
+}
+
+async function displayCamera() {
+    await startCamera()
+    const instance = networkStore.wsMap.get(roomId)!
+    // 发起共享屏幕
+    instance.send({
+        msgType: SocketMessage.sharedScreen,
+        data: {
+            roomName: roomName.value,
+            type
+        },
+    })
+    // 展示屏幕并将流添加到数组中
+    setDomVideoStream(id.value, localStream.value)
+    getPushSdp(id.value, localStream.value);
+}
+
+async function end() {
+    await endShared()
+    let video = document.getElementById(id.value) as HTMLVideoElement
+    video!.srcObject = null
+    const instance = networkStore.wsMap.get(roomId)!
+    // 结束共享屏幕
+    instance.send({
+        msgType: SocketMessage.pauseScreen,
+        data: {
+            roomName: roomName.value,
+            type
+        },
+    })
+    // if (others.value.length) {
+    //     const first = others.value[0].id
+    //     const stream = streamList.value.find((item) => item.id === first)
+    //     localVideoRef.value!.srcObject = stream.stream
+    //     others.value.splice(0, 1)
+    //     id.value = first
+    // }
 }
 
 async function initMeetingRoom() {
     //推流
     // localVideoRef.value!.srcObject = localStream.value
-    await getPushSdp(id.value, localStream.value);
+    // if (localStream.value) {
+    //     await getPushSdp(id.value, localStream.value);
+    // }
     //判断房间内是否有其他人
     others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
-    console.log('others', others.value)
     for (let i = 0; i < others.value.length; i++) {
         let user = others.value[i];
-        //拉其他用户媒体流
         await getPullSdp(user.id)
     }
 }
@@ -268,10 +357,17 @@ function setDomVideoTrick(domId: string, trick: any) {
     } else {
         stream = new MediaStream()
         stream.addTrack(trick)
-        const obj = { 
+        const obj = {
             id: domId,
             stream,
         }
+        // streamList.value.map((item) => {
+        //     if (item.id === domId && stream !== undefined) {
+        //         item.stream = stream
+        //     } else {
+        //         streamList.value.push(obj)
+        //     }
+        // })
         streamList.value.push(obj)
         video.srcObject = stream
         video.autoplay = true;
@@ -292,10 +388,17 @@ async function setDomVideoStream(domId: any, newStream: any) {
             stream.removeTrack(e)
         })
     }
-    const obj = { 
+    const obj = {
         id: domId,
         stream: newStream
     }
+    // streamList.value.map((item) => {
+    //     if (item.id === domId && stream !== undefined) {
+    //         item.stream = stream
+    //     } else {
+    //         streamList.value.push(obj)
+    //     }
+    // })
     streamList.value.push(obj)
     video.srcObject = newStream
     video.muted = true
@@ -312,7 +415,6 @@ function removeChildVideoDom(domId: string, socketId?: string) {
         others.value.splice(index, 1)
         // id复原
         id.value = socketId!
-        console.log('remove', others.value)
     } else {
         video.remove()
     }
@@ -332,7 +434,7 @@ async function closeRtc() {
 
 onMounted(async () => {
     await getMediaDevices()
-    await startCamera()
+    // await startCamera()
     if (route.query.roomId) {
         roomId = route.query.roomId as string
         type = 'attend'
@@ -352,15 +454,14 @@ function swap(domId: string) {
     const stream = streamList.value.find((item) => item.id === videoId)
     let oldStream = localVideoRef.value?.srcObject
     const localId = localVideoRef.value?.id!
-    id.value = video.id
     others.value.map((item) => {
         if (item.id === domId) {
             item.id = localId
         }
     })
-    console.log('swap', others.value)
     localVideoRef.value!.srcObject = stream.stream
     video!.srcObject = oldStream!
+    id.value = video.id
 }
 
 onUnmounted(() => {
