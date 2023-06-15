@@ -1,17 +1,5 @@
 <template>
     <div class="webrtc-push-wrap">
-        <!-- <div class="right">
-            <div class="list">
-                <div class="item" v-for="item of roomUserList" :key="item.socketId" :id="item.id + 'video'">
-                    <div class="triangle"></div>
-                    <label
-                        style="position: absolute;left: 5px;bottom: 5px;color: antiquewhite;font-size: 18px;z-index: 999;">
-                        {{ item.id }}
-                    </label>
-                    <video :id="item.id" style="object-fit: fill;height: 100%;width: 100%;" @click=swap(item.id)></video>
-                </div>
-            </div>
-        </div> -->
         <div ref="topRef" class="left">
             <div class="video-wrap" :id="id + 'video'">
                 <video :id="id" ref="localVideoRef" autoplay muted controls></video>
@@ -49,7 +37,7 @@
                             <span>开启摄像头</span>
                         </el-button>
                         <el-button v-if="!isSharedScreen" class="item" type="primary" @click="mergeStream">
-                            <span>屏幕与摄像头合并</span>
+                            <span>合并推流</span>
                         </el-button>
                         <el-button v-else class="item" type="primary" @click="end">
                             <span>结束共享</span>
@@ -61,7 +49,7 @@
         <div class="right">
             <div class="list">
                 <template v-for="item of others" :key="item.socketId">
-                    <div v-if="item.isOpen === true" class="item" :id="item.id + 'video'">
+                    <div class="item background" style="background-image: url('http://192.168.192.131:3000/img/SupperMoment.jpg')" :id="item.id + 'video'">
                         <div class="triangle"></div>
                         <label
                             style="position: absolute;left: 5px;bottom: 5px;color: antiquewhite;font-size: 18px;z-index: 999;">
@@ -70,14 +58,6 @@
                         <video :id="item.id" style="object-fit: fill;height: 100%;width: 100%;"
                             @click=swap(item.id)></video>
                     </div>
-                    <!-- <div v-else class="item background" :id="item.id + 'video'">
-                        <div class="triangle"></div>
-                        <label
-                            style="position: absolute;left: 5px;bottom: 5px;color: antiquewhite;font-size: 18px;z-index: 999;">
-                            {{ item.id }}
-                        </label>
-                        <video :id="item.id" style="object-fit: fill;height: 100%;width: 100%;" @click=swap(item.id)></video>
-                    </div> -->
                 </template>
             </div>
         </div>
@@ -166,6 +146,7 @@ function webSocketInit() {
         if (id.value !== data.socketId) {
             await getPullSdp(data.socketId)
         }
+        console.log('others', others.value)
         // await initMeetingRoom()
     });
 
@@ -176,15 +157,15 @@ function webSocketInit() {
         others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
         let video = document.getElementById(data.socketId) as HTMLVideoElement
         video.srcObject = null
+        console.log('others', others.value)
     });
 
     // 用户加入房间
     instance.socketIo.on(SocketMessage.joined, async (data) => {
         console.log('【websocket】用户加入房间完成', data);
-        if (data) {
-            roomUserList.value = data.liveUser;
-            others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
-        }
+        roomUserList.value = data.liveUser;
+        console.log(roomUserList.value)
+        others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
         // 拉流
         await initMeetingRoom()
         // 若没开启屏幕分享将他人屏幕分享
@@ -521,7 +502,9 @@ onMounted(async () => {
             topRef.value.getBoundingClientRect().top;
         localVideoRef.value.style.height = `${res}px`;
     }
-    localStorage.setItem('count', '0')
+    if (localStorage.getItem('count') === null) {
+        localStorage.setItem('count', '0')
+    }
 });
 
 function swap(domId: string) {
@@ -758,7 +741,6 @@ onUnmounted(() => {
             }
 
             .background {
-                background-image: url('http://192.168.192.131:3000/img/SupperMoment.jpg');
                 /* 背景图垂直、水平均居中 */
                 background-position: center center;
                 /* 背景图不平铺 */
