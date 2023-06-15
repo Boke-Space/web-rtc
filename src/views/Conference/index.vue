@@ -42,7 +42,7 @@
                         </span>
                     </div>
                     <div class="bottom">
-                        <el-button v-if="!isharedScreen" class="item" type="primary" @click="displayScreen">
+                        <el-button v-if="!isSharedScreen" class="item" type="primary" @click="displayScreen">
                             <span>共享屏幕</span>
                         </el-button>
                         <el-button v-if="!isSharedScreen" class="item" type="primary" @click="displayCamera">
@@ -67,6 +67,14 @@
                         <video :id="item.id" style="object-fit: fill;height: 100%;width: 100%;"
                             @click=swap(item.id)></video>
                     </div>
+                    <!-- <div v-else class="item background" :id="item.id + 'video'">
+                        <div class="triangle"></div>
+                        <label
+                            style="position: absolute;left: 5px;bottom: 5px;color: antiquewhite;font-size: 18px;z-index: 999;">
+                            {{ item.id }}
+                        </label>
+                        <video :id="item.id" style="object-fit: fill;height: 100%;width: 100%;" @click=swap(item.id)></video>
+                    </div> -->
                 </template>
             </div>
         </div>
@@ -81,18 +89,6 @@ import { WebSocketClass } from '@/utils/webSocket';
 import { getRandomString } from 'billd-utils';
 import { uniqueObjectList } from '../../utils/Array';
 
-let roomId = getRandomString(15)
-let type: WebsocketType = 'meeting'
-const roomName = ref('')
-const route = useRoute()
-const isJoin = ref(false)
-
-const topRef = ref<HTMLDivElement>();
-const bottomRef = ref<HTMLDivElement>();
-const localVideoRef = ref<HTMLVideoElement | null>(null);
-
-const streamList = ref<any[]>([]);
-
 const {
     isSharedScreen,
     localStream,
@@ -100,9 +96,20 @@ const {
     sharedScreen,
     endShared,
     startCamera
-} = useWebRTC({ localVideoRef })
+} = useWebRTC()
 
 const networkStore = useNetworkStore();
+
+let roomId = getRandomString(15)
+let type: WebsocketType = 'meeting'
+const roomName = ref('')
+const route = useRoute()
+
+const topRef = ref<HTMLDivElement>();
+const bottomRef = ref<HTMLDivElement>();
+const localVideoRef = ref<HTMLVideoElement | null>(null);
+
+const streamList = ref<any[]>([]);
 
 const PeerConnection = window.RTCPeerConnection;
 const RTCPushPeer = ref()
@@ -142,7 +149,10 @@ function webSocketInit() {
         console.log('【websocket】监听到用户分享屏幕', data);
         roomUserList.value = data.liveUser;
         others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
-        await initMeetingRoom()
+        if (id.value !== data.socketId) {
+            await getPullSdp(data.socketId)
+        }
+        // await initMeetingRoom()
     });
 
     // 收到其他用户发起共享屏幕
@@ -178,7 +188,7 @@ function webSocketInit() {
         console.log('【websocket】其他用户加入房间', data);
         roomUserList.value = data.liveUser;
         others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
-        await getPullSdp(data.username)
+        // await getPullSdp(data.username)
         let video = document.getElementById(data.username) as HTMLVideoElement
         // 其他用户没开启屏幕分享
         // if (video?.srcObject === null && others.value.length > 0) {
@@ -310,13 +320,19 @@ async function getPushSdp(streamId: string, stream: any) {
     });
     let offer = await RTCPushPeer.value.createOffer();
     await RTCPushPeer.value.setLocalDescription(offer)
+    let count = localStorage.getItem('count')
     const res: any = await fetchRtcPublish({
         api: `http://192.168.192.131:1985/rtc/v1/publish/`,
         sdp: offer.sdp!,
-        streamurl: srsServerRTCURL + streamId,
+        streamurl: srsServerRTCURL + streamId + count,
+        clientip: null,
+        tid: getRandomString(10),
     });
     if (res.code === 0) {
         await RTCPushPeer.value.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: res.sdp }))
+        console.log('push', count)
+        count = getRandomString(10)
+        localStorage.setItem('count', count)
     } else {
         console.log('失败')
     }
@@ -338,13 +354,15 @@ async function getPullSdp(streamId: string) {
         setDomVideoTrick(streamId, e.track)
     }
     let offer = await pc.createOffer();
+    let count = localStorage.getItem('count')
     await pc.setLocalDescription(offer)
     const res: any = await fetchRTCPlayApi({
         api: `http://192.168.192.131:1985/rtc/v1/play/`,
         sdp: offer.sdp!,
-        streamurl: srsServerRTCURL + streamId,
+        streamurl: srsServerRTCURL + streamId + count,
     });
     if (res.code === 0) {
+        console.log('pull', count)
         await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: res.sdp }))
     }
 }
@@ -369,7 +387,9 @@ function setDomVideoTrick(domId: string, trick: any) {
         //     }
         // })
         streamList.value.push(obj)
-        video.srcObject = stream
+        const newStream = streamList.value.findLast((item) => item.id === domId)
+        // console.log('streamList', streamList.value)
+        video.srcObject = newStream.stream
         video.autoplay = true;
         video.style.width = "100%"
         video.style.height = "100%"
@@ -400,7 +420,10 @@ async function setDomVideoStream(domId: any, newStream: any) {
     //     }
     // })
     streamList.value.push(obj)
-    video.srcObject = newStream
+    const Stream = streamList.value.findLast((item) => item.id === domId)
+    // console.log('streamList', streamList.value)
+    // console.log('stream', Stream)
+    video.srcObject = Stream.stream
     video.muted = true
     video.autoplay = true
 }
@@ -446,6 +469,7 @@ onMounted(async () => {
             topRef.value.getBoundingClientRect().top;
         localVideoRef.value.style.height = `${res}px`;
     }
+    localStorage.setItem('count', '0')
 });
 
 function swap(domId: string) {
@@ -679,6 +703,16 @@ onUnmounted(() => {
                     text-align: initial;
                     font-size: 13px;
                 }
+            }
+
+            .background {
+                background-image: url('http://192.168.192.131:3000/img/SupperMoment.jpg');
+                /* 背景图垂直、水平均居中 */
+                background-position: center center;
+                /* 背景图不平铺 */
+                background-repeat: no-repeat;
+                /* 让背景图基于容器大小伸缩 */
+                background-size: cover;
             }
         }
     }

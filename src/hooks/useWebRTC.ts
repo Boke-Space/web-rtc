@@ -1,10 +1,6 @@
 import type { Ref } from 'vue';
 
-export function useWebRTC({
-    localVideoRef
-}: {
-    localVideoRef: Ref<HTMLVideoElement | null>
-}) {
+export function useWebRTC() {
 
     const audioInputs = ref<MediaDeviceInfo[]>([])
     const audioOutputs = ref<MediaDeviceInfo[]>([])
