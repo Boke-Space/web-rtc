@@ -33,11 +33,11 @@ export function useWebRTC() {
             const res = await navigator.mediaDevices.getDisplayMedia(container)
             localStream.value = res
             isSharedScreen.value = true
-            // localVideoRef.value!.srcObject = res
             return res
+            // localVideoRef.value!.srcObject = res
         } catch (err) {
             console.error('媒体设备获取失败: ', err);
-            return [];
+            // return [];
         }
     }
 
@@ -59,7 +59,7 @@ export function useWebRTC() {
             return res
         } catch (err) {
             console.error('媒体设备获取失败: ', err);
-            return [];
+            // return [];
         }
     }
 

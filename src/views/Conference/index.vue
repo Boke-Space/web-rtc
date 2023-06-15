@@ -48,6 +48,9 @@
                         <el-button v-if="!isSharedScreen" class="item" type="primary" @click="displayCamera">
                             <span>开启摄像头</span>
                         </el-button>
+                        <el-button v-if="!isSharedScreen" class="item" type="primary" @click="mergeStream">
+                            <span>屏幕与摄像头合并</span>
+                        </el-button>
                         <el-button v-else class="item" type="primary" @click="end">
                             <span>结束共享</span>
                         </el-button>
@@ -88,6 +91,7 @@ import { SRSWebRTCClass } from '@/utils/srsWebRtc';
 import { WebSocketClass } from '@/utils/webSocket';
 import { getRandomString } from 'billd-utils';
 import { uniqueObjectList } from '../../utils/Array';
+import { VideoStreamMerger } from "video-stream-merger";
 
 const {
     isSharedScreen,
@@ -119,6 +123,16 @@ const id = ref('')
 const roomUserList = ref<any[]>([])
 const others = ref<any[]>([])
 const currentUser = ref()
+
+const camera = ref()
+const screen = ref()
+const merger = ref(new VideoStreamMerger({
+    width: 680,
+    height: 380,
+    fps: 25,
+    clearRect: true,
+    audioContext: null
+}))
 
 function webSocketInit() {
     const ws = new WebSocketClass({
@@ -271,6 +285,44 @@ async function displayCamera() {
     // 展示屏幕并将流添加到数组中
     setDomVideoStream(id.value, localStream.value)
     getPushSdp(id.value, localStream.value);
+}
+
+async function mergeStream() {
+    const instance = networkStore.wsMap.get(roomId)!
+    // 发起共享屏幕
+    instance.send({
+        msgType: SocketMessage.sharedScreen,
+        data: {
+            roomName: roomName.value,
+            type
+        },
+    })
+    camera.value = await startCamera()
+    screen.value = await sharedScreen()
+    merger.value.addStream(screen.value, {
+        x: 0,
+        y: 0,
+        width: merger.value.width,
+        height: merger.value.height,
+        mute: true,
+        index: 0,
+        draw: null,
+        audioEffect: null,
+    })
+    merger.value.addStream(camera.value, {
+        x: merger.value.width - 100,
+        y: merger.value.height - 100,
+        width: 100,
+        height: 100,
+        mute: true,
+        index: 0,
+        draw: null,
+        audioEffect: null,
+    })
+    merger.value.start()
+    // // 展示屏幕并将流添加到数组中
+    setDomVideoStream(id.value, merger.value.result)
+    getPushSdp(id.value, merger.value.result);
 }
 
 async function end() {

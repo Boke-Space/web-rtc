@@ -114,6 +114,7 @@ export interface ILive {
 export enum MediaTypeEnum {
     camera,
     screen,
+    merge
 }
 
 export enum ChatEnum {

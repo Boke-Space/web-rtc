@@ -8,6 +8,7 @@ import { SocketMessage, SocketStatus } from '@/types/websocket';
 import { WebSocketClass } from '@/utils/webSocket';
 import type { MediaType } from '@/types/media';
 import { errorMessage } from '@/utils/message';
+import { VideoStreamMerger } from "video-stream-merger";
 
 async function getAllMediaDevices() {
     try {
@@ -23,9 +24,11 @@ async function getAllMediaDevices() {
 export function usePush({
     localVideoRef,
     isSRS,
+    height
 }: {
     localVideoRef: Ref<HTMLVideoElement | undefined>;
     isSRS?: boolean;
+    height: number
 }) {
     const route = useRoute();
     const router = useRouter();
@@ -66,6 +69,10 @@ export function usePush({
         [MediaTypeEnum.screen]: {
             type: MediaTypeEnum.screen,
             txt: '窗口',
+        },
+        [MediaTypeEnum.merge]: {
+            type: MediaTypeEnum.merge,
+            txt: '合并',
         },
     };
 
@@ -130,6 +137,52 @@ export function usePush({
         }
     }
 
+    /** 摄像头与屏幕合并推流 */
+    async function mergePush() {
+        if (!localStream.value) {
+            const camera = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: true,
+            });
+            const screen = await navigator.mediaDevices.getDisplayMedia({
+                video: true,
+                audio: true,
+            });
+            currMediaType.value = allMediaTypeList[MediaTypeEnum.merge];
+            currMediaTypeList.value.push(allMediaTypeList[MediaTypeEnum.merge]);
+            if (!localVideoRef.value) return;
+            const merger = new VideoStreamMerger({
+                width: 1100,
+                height: 580,
+                fps: 25,
+                clearRect: true,
+                audioContext: null
+            })
+            merger.addStream(screen, {
+                x: 0,
+                y: 0,
+                width: merger.width,
+                height: merger.height,
+                mute: true,
+                index: 0,
+                draw: null,
+                audioEffect: null,
+            })
+            merger.addStream(camera, {
+                x: merger.width - 100,
+                y: merger.height - 100,
+                width: 100,
+                height: 100,
+                mute: true,
+                index: 0,
+                draw: null,
+                audioEffect: null,
+            })
+            merger.start()
+            localVideoRef.value.srcObject = merger.result;
+            localStream.value = merger.result;
+        }
+    }
     function startLive() {
         if (!roomNameIsOk()) return;
         if (currMediaTypeList.value.length <= 0) {
@@ -541,6 +594,7 @@ export function usePush({
         liveUserList,
         startGetDisplayMedia,
         startGetUserMedia,
+        mergePush,
         startDisabled,
         endDisabled,
         endLive,

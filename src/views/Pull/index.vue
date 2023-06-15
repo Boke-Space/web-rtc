@@ -22,7 +22,7 @@
                             <div class="danmu-item">
                                 <!-- <img class="img" :src="danmu.avatar" /> -->
                                 <!-- <span>{{ index }}{{ danmu.name }}：</span> -->
-                                <span :style="{ color: `${danmu.color}`}">{{ danmu.msg }}</span>
+                                <span :style="{ color: `${danmu.color}` }">{{ danmu.msg }}</span>
                             </div>
                         </template>
                     </vue-danmaku>
@@ -126,14 +126,15 @@ const {
     isSRS: route.query.liveType === liveTypeEnum.srsWebrtcPull,
 });
 
+// if (topRef.value && bottomRef.value && localVideoRef.value) {
+//     const res =
+//         bottomRef.value.getBoundingClientRect().top -
+//         (topRef.value.getBoundingClientRect().top +
+//             topRef.value.getBoundingClientRect().height);
+//     localVideoRef.value.style.height = `${res}px`;
+// }
+
 onMounted(() => {
-    if (topRef.value && bottomRef.value && localVideoRef.value) {
-        const res =
-            bottomRef.value.getBoundingClientRect().top -
-            (topRef.value.getBoundingClientRect().top +
-                topRef.value.getBoundingClientRect().height);
-        localVideoRef.value.style.height = `${res}px`;
-    }
     initPull();
 });
 
@@ -142,7 +143,7 @@ onUnmounted(() => {
     closeRtc();
 });
 
-watch(chatList, () => nextTick(() => chatRef.value!.scrollTop = chatRef.value?.scrollHeight!), { deep: true})
+watch(chatList, () => nextTick(() => chatRef.value!.scrollTop = chatRef.value?.scrollHeight!), { deep: true })
 </script>
 
 <style lang="scss" scoped>

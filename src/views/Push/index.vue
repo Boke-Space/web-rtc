@@ -3,7 +3,7 @@
     <div ref="topRef" class="left">
       <div class="video-wrap">
         <vue-danmaku v-model:danmus="chatList" isSuspend v-bind="config">
-          <video id="localVideo" ref="localVideoRef" autoplay muted controls></video>
+          <video id="localVideo" ref="localVideoRef" autoplay muted controls style="object-fit: fill"></video>
           <!-- 弹幕slot -->
           <template v-slot:dm="{ danmu }">
             <div class="danmu-item">
@@ -14,6 +14,7 @@
         <div v-if="!currMediaTypeList || currMediaTypeList.length <= 0" class="add-wrap">
           <el-button class="item" type="primary" @click="startGetUserMedia"> 摄像头 </el-button>
           <el-button class="item" type="primary" @click="startGetDisplayMedia"> 屏幕 </el-button>
+          <el-button class="item" type="primary" @click="mergePush"> 摄像头与屏幕合并推流 </el-button>
         </div>
       </div>
       <div ref="bottomRef" class="control">
@@ -116,6 +117,7 @@ const bottomRef = ref<HTMLDivElement>()
 const localVideoRef = ref<HTMLVideoElement>()
 const liveType = route.query.liveType
 const chatRef = ref<HTMLDivElement | null>(null)
+const height = ref(0)
 
 const config = reactive({
   useSlot: true, // 是否开启slot
@@ -128,6 +130,14 @@ const config = reactive({
   randomChannel: true // 随机弹幕轨道
 })
 
+if (topRef.value && bottomRef.value && localVideoRef.value) {
+    // const res = bottomRef.value.getBoundingClientRect().top - topRef.value.getBoundingClientRect().top
+    height.value = bottomRef.value.getBoundingClientRect().top - topRef.value.getBoundingClientRect().top
+    localVideoRef.value.style.height = `${height.value}px`
+    // console.log(res)
+    console.log(height.value)
+  }
+
 const {
   initPush,
   getSocketId,
@@ -135,6 +145,7 @@ const {
   liveUserList,
   startGetDisplayMedia,
   startGetUserMedia,
+  mergePush,
   startLive,
   endLive,
   roomName,
@@ -148,15 +159,18 @@ const {
   sendMessage
 } = usePush({
   localVideoRef,
-  isSRS: liveType === liveTypeEnum.srsPush
+  isSRS: liveType === liveTypeEnum.srsPush,
+  height: height.value
 })
 
 onMounted(() => {
   initPush()
   if (topRef.value && bottomRef.value && localVideoRef.value) {
-    const res =
-      bottomRef.value.getBoundingClientRect().top - topRef.value.getBoundingClientRect().top
-    localVideoRef.value.style.height = `${res}px`
+    // const res = bottomRef.value.getBoundingClientRect().top - topRef.value.getBoundingClientRect().top
+    height.value = bottomRef.value.getBoundingClientRect().top - topRef.value.getBoundingClientRect().top
+    localVideoRef.value.style.height = `${height.value}px`
+    // console.log(res)
+    console.log(height.value)
   }
 })
 
