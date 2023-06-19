@@ -26,7 +26,7 @@ export const fetchRtcPublish = (data: {
 
 export const getStreamsApi = () => service.get({
     baseURL: 'http://192.168.192.131:1985',
-    url: `/api/v1/streams`,
+    url: `/api/v1/streams/`,
 })
 
 export const fetchRtcClientsApi = () => service.get({

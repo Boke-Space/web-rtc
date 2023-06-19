@@ -88,6 +88,8 @@ const networkStore = useNetworkStore();
 
 let roomId = getRandomString(15)
 let type: WebsocketType = 'meeting'
+let socketId: string
+
 const roomName = ref('')
 const route = useRoute()
 
@@ -105,9 +107,6 @@ const id = ref('')
 const roomUserList = ref<any[]>([])
 const others = ref<any[]>([])
 const currentUser = ref()
-const isShared = ref(false)
-const sessionid = ref('')
-const streamid = ref('')
 
 const camera = ref()
 const screen = ref()
@@ -135,6 +134,7 @@ function webSocketInit() {
         instance.status = SocketStatus.connect;
         instance.update();
         id.value = instance.socketIo?.id!
+        socketId = instance.socketIo?.id!
         instance.send({
             msgType: SocketMessage.join,
             data: {
@@ -151,7 +151,6 @@ function webSocketInit() {
         if (id.value !== data.socketId) {
             await getPullSdp(data.socketId)
         }
-        console.log('others', others.value)
         // await initMeetingRoom()
     });
 
@@ -162,7 +161,6 @@ function webSocketInit() {
         others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
         let video = document.getElementById(data.socketId) as HTMLVideoElement
         video.srcObject = null
-        console.log('others', others.value)
     });
 
     // 用户加入房间
@@ -230,7 +228,23 @@ function webSocketInit() {
     // 用户离开房间完成
     instance.socketIo.on(SocketMessage.leaved, (data) => {
         console.log('【websocket】用户离开房间完成', data);
-        removeChildVideoDom(currentUser.value + 'video', data.socketId)
+        // 交换位置
+        if (socketId !== id.value) {
+            // 获取交换位置后元素的视频流
+            const stream = streamList.value.findLast(item => item.id === socketId)
+            // 获取交换位置后元素的位置
+            let video = document.getElementById(socketId) as HTMLVideoElement
+            localVideoRef.value!.srcObject = stream.stream
+            others.value.map((item) => {
+                if (item.id === socketId) {
+                    item.id = id.value
+                    video!.srcObject = null
+                }
+            })
+            // id复原
+            id.value = socketId
+        }
+        // removeChildVideoDom(currentUser.value + 'video', data.socketId)
     });
 
     instance.socketIo.on(SocketStatus.disconnect, async () => {
@@ -311,9 +325,6 @@ async function mergeStream() {
 }
 
 async function end() {
-    await endShared()
-    let video = document.getElementById(id.value) as HTMLVideoElement
-    video!.srcObject = null
     const instance = networkStore.wsMap.get(roomId)!
     // 结束共享屏幕
     instance.send({
@@ -325,9 +336,31 @@ async function end() {
     })
     const { streams } = await getStreamsApi()
     // 找出需要停止推流的目标
-    const stream = streams.find((item: any) => item.name === id.value)
+    const stream = streams.find((item: any) => item.name === socketId)
     // 停止推流
     await deleteStreamsApi(stream.publish.cid)
+    // 没有交换位置
+    if (socketId === id.value) {
+        await endShared()
+        let video = document.getElementById(id.value) as HTMLVideoElement
+        video!.srcObject = null
+    } else {
+        localVideoRef.value!.srcObject = null
+        //  获取交换前的视频流
+        const stream = streamList.value.findLast(item => item.id === id.value)
+        //  获取交换后的位置
+        let video = document.getElementById(socketId) as HTMLVideoElement
+        // 获取旁观者元素原有位置
+        others.value.map((item) => {
+            if (item.id === socketId) {
+                item.id = id.value
+                video!.srcObject = stream.stream
+            }
+        })
+        // id复原
+        id.value = socketId
+        // console.log('others', others.value)
+    }
     // if (others.value.length) {
     //     const first = others.value[0].id
     //     const stream = streamList.value.find((item) => item.id === first)
@@ -347,7 +380,6 @@ async function initMeetingRoom() {
     others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
     for (let i = 0; i < others.value.length; i++) {
         let user = others.value[i];
-
         await getPullSdp(user.id)
     }
 }
@@ -364,7 +396,6 @@ async function getPushSdp(streamId: string, stream: any) {
     let offer = await RTCPushPeer.value.createOffer();
     await RTCPushPeer.value.setLocalDescription(offer)
     let count = localStorage.getItem('count')
-    streamid.value = streamId
     const res: any = await fetchRtcPublish({
         api: `http://192.168.192.131:1985/rtc/v1/publish/`,
         sdp: offer.sdp!,
@@ -374,8 +405,6 @@ async function getPushSdp(streamId: string, stream: any) {
     });
     if (res.code === 0) {
         await RTCPushPeer.value.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: res.sdp }))
-        isShared.value = true
-        sessionid.value = res.sessionid
         console.log('push', localStorage.getItem('count'))
         count = getRandomString(10)
         localStorage.setItem('count', count)
