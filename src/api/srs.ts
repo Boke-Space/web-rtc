@@ -23,3 +23,18 @@ export const fetchRtcPublish = (data: {
     url: '/rtc/v1/publish/',
     data,
 })
+
+export const getStreamsApi = () => service.get({
+    baseURL: 'http://192.168.192.131:1985',
+    url: `/api/v1/streams`,
+})
+
+export const fetchRtcClientsApi = () => service.get({
+    baseURL: 'http://192.168.192.131:1985',
+    url: `/api/v1/clients/`,
+})
+
+export const deleteStreamsApi = (id: string) => service.delete<Data>({
+    baseURL: '/srs',
+    url: `/api/v1/clients/${id}`,
+})

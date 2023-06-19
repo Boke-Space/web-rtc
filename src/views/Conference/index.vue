@@ -49,7 +49,9 @@
         <div class="right">
             <div class="list">
                 <template v-for="item of others" :key="item.socketId">
-                    <div class="item background" style="background-image: url('http://192.168.192.131:3000/img/SupperMoment.jpg')" :id="item.id + 'video'">
+                    <div class="item background"
+                        style="background-image: url('http://192.168.192.131:3000/img/SupperMoment.jpg')"
+                        :id="item.id + 'video'">
                         <div class="triangle"></div>
                         <label
                             style="position: absolute;left: 5px;bottom: 5px;color: antiquewhite;font-size: 18px;z-index: 999;">
@@ -103,6 +105,9 @@ const id = ref('')
 const roomUserList = ref<any[]>([])
 const others = ref<any[]>([])
 const currentUser = ref()
+const isShared = ref(false)
+const sessionid = ref('')
+const streamid = ref('')
 
 const camera = ref()
 const screen = ref()
@@ -164,7 +169,6 @@ function webSocketInit() {
     instance.socketIo.on(SocketMessage.joined, async (data) => {
         console.log('【websocket】用户加入房间完成', data);
         roomUserList.value = data.liveUser;
-        console.log(roomUserList.value)
         others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
         // 拉流
         await initMeetingRoom()
@@ -319,6 +323,11 @@ async function end() {
             type
         },
     })
+    const { streams } = await getStreamsApi()
+    // 找出需要停止推流的目标
+    const stream = streams.find((item: any) => item.name === id.value)
+    // 停止推流
+    await deleteStreamsApi(stream.publish.cid)
     // if (others.value.length) {
     //     const first = others.value[0].id
     //     const stream = streamList.value.find((item) => item.id === first)
@@ -338,6 +347,7 @@ async function initMeetingRoom() {
     others.value = uniqueObjectList(roomUserList.value.filter(item => item.id !== id.value))
     for (let i = 0; i < others.value.length; i++) {
         let user = others.value[i];
+
         await getPullSdp(user.id)
     }
 }
@@ -354,16 +364,19 @@ async function getPushSdp(streamId: string, stream: any) {
     let offer = await RTCPushPeer.value.createOffer();
     await RTCPushPeer.value.setLocalDescription(offer)
     let count = localStorage.getItem('count')
+    streamid.value = streamId
     const res: any = await fetchRtcPublish({
         api: `http://192.168.192.131:1985/rtc/v1/publish/`,
         sdp: offer.sdp!,
-        streamurl: srsServerRTCURL + streamId + count,
+        streamurl: srsServerRTCURL + streamId,
         clientip: null,
         tid: getRandomString(10),
     });
     if (res.code === 0) {
         await RTCPushPeer.value.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: res.sdp }))
-        console.log('push', count)
+        isShared.value = true
+        sessionid.value = res.sessionid
+        console.log('push', localStorage.getItem('count'))
         count = getRandomString(10)
         localStorage.setItem('count', count)
     } else {
@@ -392,7 +405,7 @@ async function getPullSdp(streamId: string) {
     const res: any = await fetchRTCPlayApi({
         api: `http://192.168.192.131:1985/rtc/v1/play/`,
         sdp: offer.sdp!,
-        streamurl: srsServerRTCURL + streamId + count,
+        streamurl: srsServerRTCURL + streamId,
     });
     if (res.code === 0) {
         console.log('pull', count)
