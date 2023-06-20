@@ -30,6 +30,28 @@
                         </span>
                     </div>
                     <div class="bottom">
+                        <el-dropdown placement="top" style="margin-right: 16px;">
+                            <el-button class="item" type="primary">
+                                <span>麦克风</span>
+                            </el-button>
+                            <template #dropdown>
+                                <el-dropdown-menu>
+                                    <el-dropdown-item @click="handleDrop(item)" v-for="(item, index) in audioInputs"
+                                        :key="index">{{ item.label }}</el-dropdown-item>
+                                </el-dropdown-menu>
+                            </template>
+                        </el-dropdown>
+                        <el-dropdown placement="top" style="margin-right: 16px;">
+                            <el-button class="item" type="primary">
+                                <span>扬声器</span>
+                            </el-button>
+                            <template #dropdown>
+                                <el-dropdown-menu>
+                                    <el-dropdown-item @click="handleDrop(item)" v-for="(item, index) in audioOutputs"
+                                        :key="index">{{ item.label }}</el-dropdown-item>
+                                </el-dropdown-menu>
+                            </template>
+                        </el-dropdown>
                         <el-button v-if="!isSharedScreen" class="item" type="primary" @click="displayScreen">
                             <span>共享屏幕</span>
                         </el-button>
@@ -67,13 +89,10 @@
 </template>
 
 <script lang="ts" setup>
-import { ChatEnum, liveTypeEnum } from '@/types';
 import { SocketMessage, SocketStatus, type WebsocketType } from '@/types/websocket';
-import { SRSWebRTCClass } from '@/utils/srsWebRtc';
 import { WebSocketClass } from '@/utils/webSocket';
 import { getRandomString } from 'billd-utils';
 import { uniqueObjectList } from '../../utils/Array';
-import { VideoStreamMerger } from "video-stream-merger";
 
 const {
     isSharedScreen,
@@ -81,7 +100,9 @@ const {
     getMediaDevices,
     sharedScreen,
     endShared,
-    startCamera
+    startCamera,
+    audioInputs,
+    audioOutputs
 } = useWebRTC()
 
 const networkStore = useNetworkStore();
@@ -89,34 +110,23 @@ const networkStore = useNetworkStore();
 let roomId = getRandomString(15)
 let type: WebsocketType = 'meeting'
 let socketId: string
+const PeerConnection = window.RTCPeerConnection;
+const srsServerRTCURL = 'webrtc://192.168.192.131/live/';
 
-const roomName = ref('')
 const route = useRoute()
-
+const roomName = ref('')
 const topRef = ref<HTMLDivElement>();
 const bottomRef = ref<HTMLDivElement>();
 const localVideoRef = ref<HTMLVideoElement | null>(null);
-
 const streamList = ref<any[]>([]);
-
-const PeerConnection = window.RTCPeerConnection;
 const RTCPushPeer = ref()
 const RTCPullPeerMap = ref(new Map())
-const srsServerRTCURL = 'webrtc://192.168.192.131/live/';
 const id = ref('')
 const roomUserList = ref<any[]>([])
 const others = ref<any[]>([])
 const currentUser = ref()
-
-const camera = ref()
-const screen = ref()
-const merger = ref(new VideoStreamMerger({
-    width: 680,
-    height: 380,
-    fps: 25,
-    clearRect: true,
-    audioContext: null
-}))
+// 是否推流
+const isPush = ref(false)
 
 function webSocketInit() {
     const ws = new WebSocketClass({
@@ -266,8 +276,11 @@ async function displayScreen() {
         },
     })
     // 展示屏幕并将流添加到数组中
-    setDomVideoStream(id.value, localStream.value)
-    getPushSdp(id.value, localStream.value);
+    await setDomVideoStream(id.value, localStream.value)
+    if (!isPush.value) {
+        // 推流
+        await getPushSdp(id.value, localStream.value);
+    }
 }
 
 async function displayCamera() {
@@ -282,8 +295,8 @@ async function displayCamera() {
         },
     })
     // 展示屏幕并将流添加到数组中
-    setDomVideoStream(id.value, localStream.value)
-    getPushSdp(id.value, localStream.value);
+    await setDomVideoStream(id.value, localStream.value)
+    await getPushSdp(id.value, localStream.value);
 }
 
 async function mergeStream() {
@@ -296,32 +309,20 @@ async function mergeStream() {
             type
         },
     })
-    camera.value = await startCamera()
-    screen.value = await sharedScreen()
-    merger.value.addStream(screen.value, {
-        x: 0,
-        y: 0,
-        width: merger.value.width,
-        height: merger.value.height,
-        mute: true,
-        index: 0,
-        draw: null,
-        audioEffect: null,
-    })
-    merger.value.addStream(camera.value, {
-        x: merger.value.width - 100,
-        y: merger.value.height - 100,
-        width: 100,
-        height: 100,
-        mute: true,
-        index: 0,
-        draw: null,
-        audioEffect: null,
-    })
-    merger.value.start()
+    const result = await useMerger()
+    isSharedScreen.value = true
     // // 展示屏幕并将流添加到数组中
-    setDomVideoStream(id.value, merger.value.result)
-    getPushSdp(id.value, merger.value.result);
+    await setDomVideoStream(id.value, result)
+    await getPushSdp(id.value, result);
+}
+
+// 停止推流
+async function stopPush() {
+    const { streams } = await getStreamsApi()
+    // 找出需要停止推流的目标
+    const stream = streams.find((item: any) => item.name === socketId)
+    // 停止推流
+    await deleteStreamsApi(stream.publish.cid)
 }
 
 async function end() {
@@ -334,11 +335,7 @@ async function end() {
             type
         },
     })
-    const { streams } = await getStreamsApi()
-    // 找出需要停止推流的目标
-    const stream = streams.find((item: any) => item.name === socketId)
-    // 停止推流
-    await deleteStreamsApi(stream.publish.cid)
+    await stopPush()
     // 没有交换位置
     if (socketId === id.value) {
         await endShared()
@@ -395,7 +392,6 @@ async function getPushSdp(streamId: string, stream: any) {
     });
     let offer = await RTCPushPeer.value.createOffer();
     await RTCPushPeer.value.setLocalDescription(offer)
-    let count = localStorage.getItem('count')
     const res: any = await fetchRtcPublish({
         api: `http://192.168.192.131:1985/rtc/v1/publish/`,
         sdp: offer.sdp!,
@@ -405,9 +401,6 @@ async function getPushSdp(streamId: string, stream: any) {
     });
     if (res.code === 0) {
         await RTCPushPeer.value.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: res.sdp }))
-        console.log('push', localStorage.getItem('count'))
-        count = getRandomString(10)
-        localStorage.setItem('count', count)
     } else {
         console.log('失败')
     }
@@ -424,7 +417,7 @@ async function getPullSdp(streamId: string) {
     pc = new PeerConnection();
     pc.addTransceiver("audio", { direction: "recvonly" });
     pc.addTransceiver("video", { direction: "recvonly" });
-    pc.ontrack = function (e) {
+    pc.ontrack = function (e: any) {
         //这里DOM ID 就是用户UserID 和 streamID一致  
         setDomVideoTrick(streamId, e.track)
     }
@@ -476,10 +469,10 @@ async function setDomVideoStream(domId: any, newStream: any) {
     let video = document.getElementById(domId) as any
     let stream = video.srcObject
     if (stream) {
-        stream.getAudioTracks().forEach(e => {
+        stream.getAudioTracks().forEach((e: any) => {
             stream.removeTrack(e)
         })
-        stream.getVideoTracks().forEach(e => {
+        stream.getVideoTracks().forEach((e: any) => {
             stream.removeTrack(e)
         })
     }
@@ -549,6 +542,11 @@ onMounted(async () => {
     }
 });
 
+onUnmounted(() => {
+    closeWs();
+    closeRtc();
+});
+
 function swap(domId: string) {
     let videoId = domId
     const video = document.getElementById(videoId) as HTMLVideoElement
@@ -565,12 +563,18 @@ function swap(domId: string) {
     id.value = video.id
 }
 
-onUnmounted(() => {
-    closeWs();
-    closeRtc();
-});
+function handleDrop(item: any) {
+    console.log(item)
+}
 
-
+// 媒体控制
+function mediumControl(flag: boolean, kind: 'audio' | 'video') {
+    const senders = RTCPushPeer.value.getSenders()
+    console.log('senders', senders)
+    const medium = senders.find((item: any) => item.track.kind === kind)
+    medium.track.enabled = flag
+    isSharedScreen.value = flag
+}
 </script>
 
 <style lang="scss" scoped>

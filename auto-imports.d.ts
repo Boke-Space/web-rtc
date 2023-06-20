@@ -74,6 +74,7 @@ declare global {
   const useCssVars: typeof import('vue')['useCssVars']
   const useFlvPlay: typeof import('./src/hooks/useFlv')['useFlvPlay']
   const useLink: typeof import('vue-router')['useLink']
+  const useMerger: typeof import('./src/hooks/useMerger')['useMerger']
   const useNetworkStore: typeof import('./src/store/network')['useNetworkStore']
   const usePull: typeof import('./src/hooks/usePull')['usePull']
   const usePush: typeof import('./src/hooks/usePush')['usePush']
