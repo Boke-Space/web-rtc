@@ -12,8 +12,12 @@ import { onMounted } from 'vue';
                     </el-form-item>
                     <el-form-item label="麦克风" prop="audioInId">
                         <el-select v-model="formInline.audioInId" placeholder="麦克风">
-                            <el-option v-for="(item, index) in audioInputs" :key="index" :label="item.label"
-                                :value="item.deviceId"></el-option>
+                            <el-option v-for="(item, index) in audioInputs" :key="index" :label="item.label" :value="item.deviceId"></el-option>
+                        </el-select>
+                    </el-form-item>
+                    <el-form-item label="摄像头" prop="audioInId">
+                        <el-select v-model="formInline.videoInId" placeholder="麦克风">
+                            <el-option v-for="(item, index) in videoInputs" :key="index" :label="item.label" :value="item.deviceId"></el-option>
                         </el-select>
                     </el-form-item>
                     <el-form-item>
@@ -37,20 +41,22 @@ const {
 const formInline = reactive({
     nickname: '',
     roomId: '',
-    audioInId: ''
+    audioInId: '',
+    videoInId: '',
 })
 
 function joinRoom() {
     router.push({
         path: 'conference',
-        query: { roomId: formInline.roomId }
+        query: { 
+            roomId: formInline.roomId,
+            audioId: formInline.audioInId,
+            videoId: formInline.videoInId,
+        }
     })
 }
 
-onMounted(async () => {
-    await getMediaDevices()
-    console.log(audioInputs.value)
-})
+onMounted(async () => await getMediaDevices())
 </script>
 
 <style scoped>

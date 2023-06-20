@@ -31,24 +31,41 @@
                     </div>
                     <div class="bottom">
                         <el-dropdown placement="top" style="margin-right: 16px;">
-                            <el-button class="item" type="primary">
-                                <span>麦克风</span>
-                            </el-button>
+                            <el-button class="item" type="primary">麦克风</el-button>
                             <template #dropdown>
                                 <el-dropdown-menu>
-                                    <el-dropdown-item @click="handleDrop(item)" v-for="(item, index) in audioInputs"
-                                        :key="index">{{ item.label }}</el-dropdown-item>
+                                    <el-dropdown-item @click="handleDrop('audio', item)"
+                                        v-for="(item, index) in audioInputs" :key="index"
+                                        :disabled="item.deviceId === audioId">{{ item.label }}</el-dropdown-item>
                                 </el-dropdown-menu>
                             </template>
                         </el-dropdown>
                         <el-dropdown placement="top" style="margin-right: 16px;">
-                            <el-button class="item" type="primary">
-                                <span>扬声器</span>
-                            </el-button>
+                            <el-button class="item" type="primary">摄像头</el-button>
                             <template #dropdown>
                                 <el-dropdown-menu>
-                                    <el-dropdown-item @click="handleDrop(item)" v-for="(item, index) in audioOutputs"
-                                        :key="index">{{ item.label }}</el-dropdown-item>
+                                    <el-dropdown-item @click="handleDrop('video', item)"
+                                        v-for="(item, index) in videoInputs" :key="index"
+                                        :disabled="item.deviceId === videoId">{{ item.label }}</el-dropdown-item>
+                                </el-dropdown-menu>
+                            </template>
+                        </el-dropdown>
+                        <el-dropdown placement="top" style="margin-right: 16px;">
+                            <el-button class="item" type="primary">扬声器</el-button>
+                            <template #dropdown>
+                                <el-dropdown-menu>
+                                    <el-dropdown-item @click="handleDrop('audioOut', item)"
+                                        v-for="(item, index) in audioOutputs" :key="index"
+                                        :disabled="item.deviceId === audioOutId">{{ item.label }}</el-dropdown-item>
+                                </el-dropdown-menu>
+                            </template>
+                        </el-dropdown>
+                        <el-dropdown placement="top" style="margin-right: 16px;">
+                            <el-button class="item" type="primary">推流</el-button>
+                            <template #dropdown>
+                                <el-dropdown-menu>
+                                    <el-dropdown-item v-if="!isSharedScreen" @click="displayScreen">共享屏幕</el-dropdown-item>
+                                    <el-dropdown-item v-if="!isSharedScreen" @click="mergeStream">合并推流</el-dropdown-item>
                                 </el-dropdown-menu>
                             </template>
                         </el-dropdown>
@@ -58,10 +75,16 @@
                         <el-button v-if="!isSharedScreen" class="item" type="primary" @click="displayCamera">
                             <span>开启摄像头</span>
                         </el-button>
-                        <el-button v-if="!isSharedScreen" class="item" type="primary" @click="mergeStream">
-                            <span>合并推流</span>
+                        <el-button v-if="!audioStatus" class="item" type="primary" @click="mediumControl(true, 'audio')">
+                            <span>开启麦克风</span>
                         </el-button>
-                        <el-button v-else class="item" type="primary" @click="end">
+                        <!-- <el-button v-if="!isSharedScreen" class="item" type="primary" @click="mergeStream">
+                            <span>合并推流</span>
+                        </el-button> -->
+                        <el-button v-if="audioStatus" class="item" type="primary" @click="mediumControl(false, 'audio')">
+                            <span>关闭麦克风</span>
+                        </el-button>
+                        <el-button v-if="isSharedScreen" class="item" type="primary" @click="end">
                             <span>结束共享</span>
                         </el-button>
                     </div>
@@ -102,6 +125,7 @@ const {
     endShared,
     startCamera,
     audioInputs,
+    videoInputs,
     audioOutputs
 } = useWebRTC()
 
@@ -127,6 +151,13 @@ const others = ref<any[]>([])
 const currentUser = ref()
 // 是否推流
 const isPush = ref(false)
+const audioStatus = ref(true)
+const videoStatus = ref(true)
+const audioId = ref('')
+const audioValue = ref('')
+const videoId = ref('')
+const videoValue = ref('')
+const audioOutId = ref('')
 
 function webSocketInit() {
     const ws = new WebSocketClass({
@@ -264,8 +295,82 @@ function webSocketInit() {
     });
 }
 
+// 媒体控制
+function mediumControl(flag: boolean, kind: 'audio' | 'video') {
+    const senders = RTCPushPeer.value.getSenders()
+    const medium = senders.find((item: any) => item.track.kind === kind)
+    medium.track.enabled = flag
+    isSharedScreen.value = flag
+    if (kind === 'audio') audioStatus.value = flag
+    if (kind === 'video') videoStatus.value = flag
+}
+
+async function dropCallback(kind: 'video' | 'audio' | 'audioOut') {
+    const instance = networkStore.wsMap.get(roomId)!
+    // 发起共享屏幕
+    instance.send({
+        msgType: SocketMessage.sharedScreen,
+        data: {
+            roomName: roomName.value,
+            type
+        },
+    })
+    const constraints = {
+        audio: {
+            deviceId: audioId.value ? { exact: audioId.value } : undefined
+        },
+        video: {
+            deviceId: videoId.value ? { exact: videoId.value } : undefined,
+        },
+    };
+    const res = await startCamera(constraints)
+    await setDomVideoStream(id.value, localStream.value)
+    if (!isPush.value) {
+        // 推流
+        await getPushSdp(id.value, localStream.value);
+        isPush.value = true
+    } else {
+        const video = res?.getTracks().find((track) => track.kind === kind)
+        const senders = RTCPushPeer.value.getSenders()
+        const send = senders.find((s) => s.track.kind === kind)
+        send.replaceTrack(video)
+    }
+}
+
+async function handleDrop(type: 'audio' | 'video' | 'audioOut', item: any) {
+    if (type === 'audio') {
+        audioId.value = item.deviceId
+        audioValue.value = item.label
+        dropCallback(type)
+    }
+    if (type === 'video') {
+        videoId.value = item.deviceId
+        videoValue.value = item.label
+        dropCallback(type)
+    }
+    // if (type === 'audioOut') {
+    //     audioOutId.value = item.deviceId
+    //     const constraints = {
+    //         audio: {
+    //             deviceId: audioId.value ? { exact: audioId.value } : undefined
+    //         },
+    //         video: {
+    //             deviceId: videoId.value ? { exact: videoId.value } : undefined,
+    //         },
+    //     };
+    //     const res = await startCamera(constraints)
+    //     const track = res?.getAudioTracks()[0]!
+    //     const newStream = new MediaStream();
+    //     newStream.addTrack(track);
+    //     const videoElement = localVideoRef.value!
+    //     videoElement.srcObject = newStream;
+    //     // 使用 setSinkId() 方法指定目标扬声器
+    //     await videoElement.setSinkId(audioOutId.value);
+    // }
+}
+
 async function displayScreen() {
-    await sharedScreen()
+    const res = await sharedScreen()
     const instance = networkStore.wsMap.get(roomId)!
     // 发起共享屏幕
     instance.send({
@@ -280,11 +385,25 @@ async function displayScreen() {
     if (!isPush.value) {
         // 推流
         await getPushSdp(id.value, localStream.value);
+        isPush.value = true
+    } else {
+        const video = res?.getTracks().find((track) => track.kind === 'video')
+        const senders = RTCPushPeer.value.getSenders()
+        const send = senders.find((s) => s.track.kind === 'video')
+        send.replaceTrack(video)
     }
 }
 
 async function displayCamera() {
-    await startCamera()
+    const constraints = {
+        audio: {
+            deviceId: audioId.value ? { exact: audioId.value } : undefined
+        },
+        video: {
+            deviceId: videoId.value ? { exact: videoId.value } : undefined,
+        },
+    };
+    const res = await startCamera(constraints)
     const instance = networkStore.wsMap.get(roomId)!
     // 发起共享屏幕
     instance.send({
@@ -296,7 +415,16 @@ async function displayCamera() {
     })
     // 展示屏幕并将流添加到数组中
     await setDomVideoStream(id.value, localStream.value)
-    await getPushSdp(id.value, localStream.value);
+    if (!isPush.value) {
+        // 推流
+        await getPushSdp(id.value, localStream.value);
+        isPush.value = true
+    } else {
+        const video = res?.getTracks().find((track) => track.kind === 'video')
+        const senders = RTCPushPeer.value.getSenders()
+        const send = senders.find((s) => s.track.kind === 'video')
+        send.replaceTrack(video)
+    }
 }
 
 async function mergeStream() {
@@ -309,20 +437,20 @@ async function mergeStream() {
             type
         },
     })
-    const result = await useMerger()
     isSharedScreen.value = true
-    // // 展示屏幕并将流添加到数组中
+    // 展示屏幕并将流添加到数组中
+    const result = await useMerger()
     await setDomVideoStream(id.value, result)
-    await getPushSdp(id.value, result);
-}
-
-// 停止推流
-async function stopPush() {
-    const { streams } = await getStreamsApi()
-    // 找出需要停止推流的目标
-    const stream = streams.find((item: any) => item.name === socketId)
-    // 停止推流
-    await deleteStreamsApi(stream.publish.cid)
+    if (!isPush.value) {
+        // 推流
+        await getPushSdp(id.value, result);
+        isPush.value = true
+    } else {
+        const video = result?.getTracks().find((track) => track.kind === 'video')
+        const senders = RTCPushPeer.value.getSenders()
+        const send = senders.find((s) => s.track.kind === 'video')
+        send.replaceTrack(video)
+    }
 }
 
 async function end() {
@@ -335,7 +463,7 @@ async function end() {
             type
         },
     })
-    await stopPush()
+    // await stopPush()
     // 没有交换位置
     if (socketId === id.value) {
         await endShared()
@@ -379,6 +507,23 @@ async function initMeetingRoom() {
         let user = others.value[i];
         await getPullSdp(user.id)
     }
+}
+
+
+function swap(domId: string) {
+    let videoId = domId
+    const video = document.getElementById(videoId) as HTMLVideoElement
+    const stream = streamList.value.find((item) => item.id === videoId)
+    let oldStream = localVideoRef.value?.srcObject
+    const localId = localVideoRef.value?.id!
+    others.value.map((item) => {
+        if (item.id === domId) {
+            item.id = localId
+        }
+    })
+    localVideoRef.value!.srcObject = stream.stream
+    video!.srcObject = oldStream!
+    id.value = video.id
 }
 
 //SRS 推流
@@ -430,7 +575,7 @@ async function getPullSdp(streamId: string) {
         streamurl: srsServerRTCURL + streamId,
     });
     if (res.code === 0) {
-        console.log('pull', count)
+        // console.log('pull', count)
         await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: res.sdp }))
     }
 }
@@ -462,6 +607,7 @@ function setDomVideoTrick(domId: string, trick: any) {
         video.style.width = "100%"
         video.style.height = "100%"
         video.muted = true
+        video.controls = true
     }
 }
 
@@ -496,6 +642,34 @@ async function setDomVideoStream(domId: any, newStream: any) {
     video.autoplay = true
 }
 
+onMounted(async () => {
+    await getMediaDevices()
+    // await startCamera()
+    if (route.query.roomId) {
+        roomId = route.query.roomId as string
+        type = 'attend'
+        // audioId.value = route.query.audioId as string
+        // videoId.value = route.query.videoId as string
+    } else {
+        // audioId.value = audioInputs.value[0].deviceId
+        // audioValue.value = audioInputs.value[0].label
+        // videoId.value = videoInputs.value[0].deviceId
+        // videoValue.value = audioInputs.value[0].label
+    }
+    webSocketInit()
+    if (topRef.value && bottomRef.value && localVideoRef.value) {
+        const res =
+            bottomRef.value.getBoundingClientRect().top -
+            topRef.value.getBoundingClientRect().top;
+        localVideoRef.value.style.height = `${res}px`;
+    }
+});
+
+onUnmounted(() => {
+    closeWs();
+    closeRtc();
+});
+
 function removeChildVideoDom(domId: string, socketId?: string) {
     let video = document.getElementById(domId) as HTMLVideoElement
     if (video?.id.replace('video', '') === id.value) {
@@ -511,6 +685,15 @@ function removeChildVideoDom(domId: string, socketId?: string) {
     }
 }
 
+// 停止推流
+async function stopPush() {
+    const { streams } = await getStreamsApi()
+    // 找出需要停止推流的目标
+    const stream = streams.find((item: any) => item.name === socketId)
+    // 停止推流
+    await deleteStreamsApi(stream.publish.cid)
+}
+
 async function closeWs() {
     const instance = networkStore.wsMap.get(roomId);
     instance?.close();
@@ -521,59 +704,6 @@ async function closeRtc() {
     networkStore.rtcMap.forEach((rtc) => {
         rtc.close();
     });
-}
-
-onMounted(async () => {
-    await getMediaDevices()
-    // await startCamera()
-    if (route.query.roomId) {
-        roomId = route.query.roomId as string
-        type = 'attend'
-    }
-    webSocketInit()
-    if (topRef.value && bottomRef.value && localVideoRef.value) {
-        const res =
-            bottomRef.value.getBoundingClientRect().top -
-            topRef.value.getBoundingClientRect().top;
-        localVideoRef.value.style.height = `${res}px`;
-    }
-    if (localStorage.getItem('count') === null) {
-        localStorage.setItem('count', '0')
-    }
-});
-
-onUnmounted(() => {
-    closeWs();
-    closeRtc();
-});
-
-function swap(domId: string) {
-    let videoId = domId
-    const video = document.getElementById(videoId) as HTMLVideoElement
-    const stream = streamList.value.find((item) => item.id === videoId)
-    let oldStream = localVideoRef.value?.srcObject
-    const localId = localVideoRef.value?.id!
-    others.value.map((item) => {
-        if (item.id === domId) {
-            item.id = localId
-        }
-    })
-    localVideoRef.value!.srcObject = stream.stream
-    video!.srcObject = oldStream!
-    id.value = video.id
-}
-
-function handleDrop(item: any) {
-    console.log(item)
-}
-
-// 媒体控制
-function mediumControl(flag: boolean, kind: 'audio' | 'video') {
-    const senders = RTCPushPeer.value.getSenders()
-    console.log('senders', senders)
-    const medium = senders.find((item: any) => item.track.kind === kind)
-    medium.track.enabled = flag
-    isSharedScreen.value = flag
 }
 </script>
 

@@ -12,6 +12,7 @@ declare module '@vue/runtime-core' {
     Barrage: typeof import('./src/components/Barrage.vue')['default']
     Camera: typeof import('./src/components/Camera.vue')['default']
     Danmu: typeof import('./src/components/Danmu.vue')['default']
+    ElBadge: typeof import('element-plus/es')['ElBadge']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElDialog: typeof import('element-plus/es')['ElDialog']
     ElDropdown: typeof import('element-plus/es')['ElDropdown']

@@ -48,14 +48,15 @@ export function useWebRTC() {
     }
 
     // 开启摄像头
-    async function startCamera() {
+    async function startCamera(container) {
         try {
-            const container = ({
-                video: true,
-                audio: true
-            })
+            // const container = ({
+            //     video: true,
+            //     audio: true
+            // })
             const res = await navigator.mediaDevices.getUserMedia(container);
             localStream.value = res
+            isSharedScreen.value = true
             return res
         } catch (err) {
             console.error('媒体设备获取失败: ', err);

@@ -13,7 +13,10 @@ export async function useMerger() {
         audioContext: null
     })
 
-    camera = await startCamera() as MediaStream
+    camera = await startCamera({
+        video: true,
+        audio: true
+    }) as MediaStream
     screen = await sharedScreen() as MediaStream
     merger.addStream(screen, {
         x: 0,
